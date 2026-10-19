@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import requests
 
 # ---------------------------------------------------------
 # 1. AUTENTICAZIONE E CONFIGURAZIONE
@@ -44,40 +43,15 @@ SQUADRE_GIRONE_B = [
     "PALESTRINA", "FORTITUDO ANAGNI"
 ]
 
-# Inizializzazione della classifica modificabile in sessione
-if "df_classifica_a" not in st.session_state:
-    st.session_state["df_classifica_a"] = pd.DataFrame([
-        {"Squadra": sq, "Punti": 0, "Gare": 0, "Vinte": 0, "Perse": 0} for sq in SQUADRE_GIRONE_A
-    ])
+# Inizializzazione della classifica in sessione
+if "classifica_data_a" not in st.session_state:
+    st.session_state["classifica_data_a"] = {sq: {"Punti": 0, "Gare": 1, "Vinte": 0, "Perse": 1} for sq in SQUADRE_GIRONE_A}
 
-if "df_classifica_b" not in st.session_state:
-    st.session_state["df_classifica_b"] = pd.DataFrame([
-        {"Squadra": sq, "Punti": 0, "Gare": 0, "Vinte": 0, "Perse": 0} for sq in SQUADRE_GIRONE_B
-    ])
+if "classifica_data_b" not in st.session_state:
+    st.session_state["classifica_data_b"] = {sq: {"Punti": 0, "Gare": 1, "Vinte": 0, "Perse": 1} for sq in SQUADRE_GIRONE_B}
 
 # ---------------------------------------------------------
-# 3. CHIAMATA API DIRETTA PER DATI IN TEMPO REALE
-# ---------------------------------------------------------
-@st.cache_data(ttl=300)
-def fetch_fip_api(codice_girone):
-    """
-    Tenta la lettura diretta dai server backend FIP
-    """
-    api_url = f"https://fip.it/api/v1/risultati?codice_girone={codice_girone}"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
-        "Accept": "application/json"
-    }
-    try:
-        res = requests.get(api_url, headers=headers, timeout=5)
-        if res.status_code == 200:
-            return res.json()
-    except Exception:
-        pass
-    return None
-
-# ---------------------------------------------------------
-# 4. SIDEBAR - REGOLAZIONI E CRITICITÀ
+# 3. SIDEBAR - REGOLAZIONI, PUNTI E CRITICITÀ
 # ---------------------------------------------------------
 st.sidebar.header("⚙️ Impostazioni Algoritmo")
 
@@ -91,9 +65,27 @@ soglia_rosso = st.sidebar.slider("Soglia Formatore al Tavolo (Rosso)", 6.0, 10.0
 soglia_giallo = st.sidebar.slider("Soglia Tutor in Campo (Giallo)", 4.0, 7.9, 6.0)
 
 st.sidebar.markdown("---")
+st.sidebar.header("📝 Aggiorna Punti Classifica")
+girone_sel = st.sidebar.radio("Seleziona Girone:", ["Girone A", "Girone B"])
+squadre_opt = SQUADRE_GIRONE_A if girone_sel == "Girone A" else SQUADRE_GIRONE_B
+sq_mod = st.sidebar.selectbox("Squadra:", squadre_opt)
+
+pt_input = st.sidebar.number_input("Punti:", min_value=0, max_value=40, value=0)
+v_input = st.sidebar.number_input("Vittorie:", min_value=0, max_value=20, value=0)
+p_input = st.sidebar.number_input("Sconfitte:", min_value=0, max_value=20, value=0)
+
+if st.sidebar.button("Aggiorna Squadra"):
+    dict_target = st.session_state["classifica_data_a"] if girone_sel == "Girone A" else st.session_state["classifica_data_b"]
+    dict_target[sq_mod]["Punti"] = pt_input
+    dict_target[sq_mod]["Vinte"] = v_input
+    dict_target[sq_mod]["Perse"] = p_input
+    dict_target[sq_mod]["Gare"] = v_input + p_input
+    st.sidebar.success(f"Aggiornata {sq_mod}!")
+
+st.sidebar.markdown("---")
 st.sidebar.header("⚠️ Criticità Manuali Società")
 tutte_sq = sorted(list(set(SQUADRE_GIRONE_A + SQUADRE_GIRONE_B)))
-nuova_societa = st.sidebar.selectbox("Seleziona Squadra:", tutte_sq)
+nuova_societa = st.sidebar.selectbox("Seleziona Squadra per Criticità:", tutte_sq)
 livello_crit = st.sidebar.selectbox("Livello Criticità", ["Normale (+0)", "Media (+2.0)", "Alta (+4.0)"])
 nota_crit = st.sidebar.text_input("Nota (es. Pubblico caldo):")
 
@@ -105,7 +97,7 @@ if st.sidebar.button("Salva Criticità"):
     st.sidebar.success(f"Criticità salvata per {nuova_societa}")
 
 # ---------------------------------------------------------
-# 5. MAIN DASHBOARD & CALCOLO SCORE
+# 4. MAIN DASHBOARD & CALCOLO SCORE
 # ---------------------------------------------------------
 st.title("🏀 Dashboard Designazione CIA - U15 Gold Lazio")
 st.markdown("Analisi gare e valutazione criticità miniarbitri.")
@@ -139,8 +131,48 @@ def calcola_score(pos_casa, pos_fuori, casa_name, fuori_name):
         
     return min(score, 10.0), ", ".join(dettagli)
 
-def render_girone_ui(key_df, codice_girone):
-    st.subheader("📊 Classifica Reale (Modificabile in tempo reale)")
-    st.info("💡 Puoi fare doppio click sulle celle per aggiornare Punti/Vittorie/Sconfitte appena i pallini diventano omologati sul sito FIP.")
-    
-    # Editor interattivo di
+def render_girone_ui(key_dict, squadre_lista):
+    # Costruzione DataFrame Classifica
+    data = []
+    for sq, info in st.session_state[key_dict].items():
+        data.append({"Squadra": sq, "Punti": info["Punti"], "G": info["Gare"], "V": info["Vinte"], "P": info["Perse"]})
+        
+    df = pd.DataFrame(data)
+    df = df.sort_values(by=["Punti", "V", "Squadra"], ascending=[False, False, True]).reset_index(drop=True)
+    df["Posizione"] = range(1, len(df) + 1)
+    df = df[["Posizione", "Squadra", "Punti", "G", "V", "P"]]
+
+    st.subheader("📊 Classifica Squadre")
+    st.dataframe(df, use_container_width=True, hide_index=True)
+
+    pos_dict = {row["Squadra"]: row["Posizione"] for _, row in df.iterrows()}
+    punti_dict = {row["Squadra"]: row["Punti"] for _, row in df.iterrows()}
+
+    st.markdown("---")
+    st.subheader("📅 Analisi Partite e Assegnazione Formatori/Tutor")
+
+    # Generazione accoppiamenti
+    for i in range(0, len(squadre_lista)-1, 2):
+        casa, fuori = squadre_lista[i], squadre_lista[i+1]
+        p_casa, p_fuori = pos_dict.get(casa, 5), pos_dict.get(fuori, 5)
+        pt_casa, pt_fuori = punti_dict.get(casa, 0), punti_dict.get(fuori, 0)
+        
+        sc, dett = calcola_score(p_casa, p_fuori, casa, fuori)
+        
+        match_info = f"**{casa} ({p_casa}ª - {pt_casa}pt)** vs **{fuori} ({p_fuori}ª - {pt_fuori}pt)**"
+        
+        if sc >= soglia_rosso:
+            st.error(f"🔴 **SCORE {sc:.1f} / 10** | {match_info}\n\n"
+                     f"👉 **AZIONI CONSIGLIATE:** FORMATORE AL TAVOLO\n\n*Motivazione:* {dett if dett else 'Scontro diretto ad alta criticità'}")
+        elif sc >= soglia_giallo:
+            st.warning(f"🟡 **SCORE {sc:.1f} / 10** | {match_info}\n\n"
+                       f"👉 **AZIONI CONSIGLIATE:** TUTOR IN CAMPO CON IL MINIARBITRO\n\n*Motivazione:* {dett if dett else 'Gara equilibrata'}")
+        else:
+            st.success(f"🟢 **SCORE {sc:.1f} / 10** | {match_info}\n\n"
+                       f"👉 **AZIONI CONSIGLIATE:** MINIARBITRI IN AUTONOMIA\n\n*Motivazione:* {dett if dett else 'Match ordinario'}")
+
+with tab1:
+    render_girone_ui("classifica_data_a", SQUADRE_GIRONE_A)
+
+with tab2:
+    render_girone_ui("classifica_data_b", SQUADRE_GIRONE_B)
