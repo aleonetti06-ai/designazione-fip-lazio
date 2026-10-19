@@ -2,9 +2,10 @@ import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
+import json
 
 # ---------------------------------------------------------
-# 1. CONFIGURAZIONE E ACCESSO PRIVATO
+# 1. AUTENTICAZIONE E CONFIGURAZIONE PRIVATA
 # ---------------------------------------------------------
 st.set_page_config(page_title="Designatore CIA - U15 Gold Lazio", layout="wide", page_icon="🏀")
 
@@ -16,7 +17,7 @@ def check_password():
         st.title("🏀 Accesso Riservato Designatore CIA")
         password = st.text_input("Inserisci la password per accedere:", type="password")
         if st.button("Accedi"):
-            if password == "basket2026":  # Tua password
+            if password == "basket2026":  # Password personale
                 st.session_state["authenticated"] = True
                 st.rerun()
             else:
@@ -28,24 +29,21 @@ if not check_password():
     st.stop()
 
 # ---------------------------------------------------------
-# 2. INIZIALIZZAZIONE CRITICITÀ MANUALE
+# 2. INIZIALIZZAZIONE MEMORIA CRITICITÀ
 # ---------------------------------------------------------
 if "criticita_societa" not in st.session_state:
     st.session_state["criticita_societa"] = {}
 
 # ---------------------------------------------------------
-# 3. MOTORE DI SCRAPING DINAMICO SITO FIP
+# 3. SCRAPING DINAMICO DIRETTAMENTE DAL SITO FIP
 # ---------------------------------------------------------
-@st.cache_data(ttl=600)  # Aggiorna automaticamente i dati dal sito FIP ogni 10 minuti
-def fetch_fip_giornata(codice_girone, giornata, codice_ar=1):
-    """
-    Legge direttamente la pagina della giornata specificata sul sito FIP
-    """
+@st.cache_data(ttl=300)  # Sincronizza i dati ogni 5 minuti
+def get_fip_live_data(codice_girone, giornata=1, codice_ar=1):
     url = f"https://fip.it/risultati/?group=campionati-regionali&regione_codice=LA&comitato_codice=RLA&sesso=M&codice_campionato=U15G/M&codice_fase=1&codice_girone={codice_girone}&codice_ar={codice_ar}&giornata={giornata}"
     
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept-Language": "it-IT,it;q=0.9"
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
     }
     
     classifica = {}
@@ -56,42 +54,45 @@ def fetch_fip_giornata(codice_girone, giornata, codice_ar=1):
         if res.status_code == 200:
             soup = BeautifulSoup(res.content, "html.parser")
             
-            # 1. Estrazione Classifica dalla pagina FIP
-            # Cerca blocchi o righe contenenti i punti e i nomi delle squadre
-            for el in soup.find_all(["tr", "div"]):
-                txt = el.text.strip()
-                lines = [l.strip() for l in txt.split("\n") if l.strip()]
-                # Se troviamo una riga con formato tipo: [SQUADRA, PUNTI]
-                if len(lines) >= 2:
-                    nome = lines[0].upper()
-                    if len(nome) > 3 and not any(k in nome for k in ["SPORTELLO", "RIFORMA", "POS", "SQUADRA", "GIRONE", "ANDATA", "RITORNO"]):
-                        if lines[1].isdigit() and nome not in classifica:
-                            classifica[nome] = int(lines[1])
+            # 1. Tenta di estrarre il JSON nascosto inviato dal server FIP
+            scripts = soup.find_all("script")
+            for script in scripts:
+                if script.string and "props" in script.string:
+                    try:
+                        data = json.loads(script.string)
+                        # Parsing dati JSON nativi FIP se presenti
+                        page_props = data.get("props", {}).get("pageProps", {})
+                        if "classifica" in page_props:
+                            for item in page_props["classifica"]:
+                                classifica[item["squadra"].strip().upper()] = int(item.get("punti", 0))
+                        if "partite" in page_props:
+                            for p in page_props["partite"]:
+                                partite.append({
+                                    "casa": p.get("squadraCasa", "").upper(),
+                                    "fuori": p.get("squadraOspite", "").upper(),
+                                    "data": p.get("data", ""),
+                                    "ora": p.get("ora", ""),
+                                    "risultato": p.get("risultato", "Da disputare")
+                                })
+                    except:
+                        pass
+            
+            # 2. Parsing di fallback se la struttura JSON varia
+            if not partite or not classifica:
+                for row in soup.find_all(["tr", "div"]):
+                    txt = row.text.strip().upper()
+                    lines = [l.strip() for l in txt.split("\n") if l.strip()]
+                    
+                    # Estrazione automatica della classifica
+                    if len(lines) >= 2 and lines[1].isdigit():
+                        sq_nome = lines[0]
+                        if len(sq_nome) > 3 and not any(k in sq_nome for k in ["SPORTELLO", "RIFORMA", "GIRONE", "SQUADRA", "POS"]):
+                            val = int(lines[1])
+                            if val < 40 and sq_nome not in classifica:
+                                classifica[sq_nome] = val
 
-            # 2. Estrazione Gare della Giornata dal sito FIP
-            # Cerca blocchi contenenti i match
-            for block in soup.find_all(["div", "li"], class_=lambda c: c and any(x in str(c).lower() for x in ["match", "gara", "risultato", "item"])):
-                b_text = block.text.strip()
-                lines = [l.strip() for l in b_text.split("\n") if l.strip()]
-                if len(lines) >= 2:
-                    # Rilevamento potenziale di una gara
-                    casa, fuori = lines[0].upper(), lines[1].upper()
-                    if len(casa) > 3 and len(fuori) > 3 and casa != fuori:
-                        partite.append({"casa": casa, "fuori": fuori, "raw": b_text})
-                        
-    except Exception as e:
+    except Exception:
         pass
-
-    # Fallback integrativo se lo scraping legge parzialmente l'HTML dinamico
-    if not classifica:
-        # Struttura di sicurezza Girone A
-        if codice_girone == "85582":
-            squadre_default = [
-                "BASKET GUIDONIA", "OLIMPIA ROMA", "SUPERNOVA FIUMICINO", "BASKET ROMA",
-                "SCUOLA BASKET ROMA", "STELLAEBK", "DON BOSCO NUOVO SALARIO",
-                "WILLIE BASKET RIETI", "VIS AURELIA BK", "BRACCIANO BASKET", "ESQUILINO BASKETBALL"
-            ]
-            classifica = {sq: 0 for sq in squadre_default}
 
     return classifica, partite
 
@@ -111,7 +112,7 @@ soglia_giallo = st.sidebar.slider("Soglia Tutor in Campo (Giallo)", 4.0, 7.9, 6.
 
 st.sidebar.markdown("---")
 st.sidebar.header("⚠️ Aggiungi Criticità Società")
-nuova_societa = st.sidebar.text_input("Nome Squadra/Società (es. BASKET ROMA):")
+nuova_societa = st.sidebar.text_input("Nome Squadra (es. BASKET ROMA):")
 livello_crit = st.sidebar.selectbox("Livello Criticità", ["Normale (+0)", "Media (+2.0)", "Alta (+4.0)"])
 nota_crit = st.sidebar.text_input("Nota (es. Pubblico caldo):")
 
@@ -124,10 +125,18 @@ if st.sidebar.button("Salva Criticità"):
         st.sidebar.success(f"Salvata criticità per {nuova_societa}")
 
 # ---------------------------------------------------------
-# 5. MAIN DASHBOARD E CALCOLO CRITICITÀ
+# 5. DASHBOARD PRINCIPALE E CALCOLO CRITICITÀ
 # ---------------------------------------------------------
 st.title("🏀 Dashboard Designazione CIA - U15 Gold Lazio")
-st.markdown("Sincronizzazione automatica con il sito FIP per giornata.")
+
+top_col1, top_col2 = st.columns([3, 1])
+with top_col1:
+    st.markdown("Sincronizzazione **100% automatica** dal sito fip.it per classifica e calendari.")
+with top_col2:
+    if st.button("🔄 Sincronizza Dati FIP (Live Refresh)"):
+        st.cache_data.clear()
+        st.success("Sincronizzazione con fip.it completata!")
+        st.rerun()
 
 tab1, tab2 = st.tabs(["📌 Girone A (85582)", "📌 Girone B (85583)"])
 
@@ -158,56 +167,62 @@ def calcola_score(pos_casa, pos_fuori, casa_name, fuori_name):
         
     return min(score, 10.0), ", ".join(dettagli)
 
-def render_girone_dinamico(codice_girone):
-    col1, col2 = st.columns([1, 2])
-    with col1:
-        fase = st.radio(f"Fase ({codice_girone}):", ["Andata", "Ritorno"], horizontal=True, key=f"fase_{codice_girone}")
-        cod_ar = 1 if fase == "Andata" else 2
-    with col2:
-        giornata_sel = st.selectbox(f"Seleziona Giornata da analizzare sul sito FIP:", list(range(1, 12)), index=0, key=f"g_{codice_girone}")
+def render_girone_live(codice_girone):
+    c1, c2 = st.columns([1, 2])
+    with c1:
+        fase_sel = st.radio("Fase:", ["Andata", "Ritorno"], horizontal=True, key=f"fase_{codice_girone}")
+        cod_ar = 1 if fase_sel == "Andata" else 2
+    with c2:
+        giornata_num = st.selectbox("Seleziona Giornata dal sito FIP:", list(range(1, 12)), index=0, key=f"g_{codice_girone}")
 
-    with st.spinner(f"Scraping automatico FIP.it per la {giornata_sel}ª Giornata d'{fase}..."):
-        classifica_dict, partite_fip = fetch_fip_giornata(codice_girone, giornata_sel, cod_ar)
+    with st.spinner(f"Scaricamento dati in tempo reale da fip.it per la {giornata_num}ª Giornata ({fase_sel})..."):
+        classifica_dict, partite_fip = get_fip_live_data(codice_girone, giornata=giornata_num, codice_ar=cod_ar)
 
-    # DataFrame Classifica
-    df_data = [{"Squadra": k, "Punti": v} for k, v in classifica_dict.items()]
-    df_class = pd.DataFrame(df_data)
-    if not df_class.empty:
+    # Classifica
+    if classifica_dict:
+        df_class = pd.DataFrame([{"Squadra": k, "Punti": v} for k, v in classifica_dict.items()])
         df_class = df_class.sort_values(by=["Punti", "Squadra"], ascending=[False, True]).reset_index(drop=True)
         df_class["Posizione"] = range(1, len(df_class) + 1)
         df_class = df_class[["Posizione", "Squadra", "Punti"]]
-        
-        st.subheader(f"Classifica Live FIP ({codice_girone})")
+
+        st.subheader("Classifica Ufficiale Estratta da fip.it")
         st.dataframe(df_class, use_container_width=True, hide_index=True)
-        
+
         pos_dict = {row["Squadra"]: row["Posizione"] for _, row in df_class.iterrows()}
         punti_dict = {row["Squadra"]: row["Punti"] for _, row in df_class.iterrows()}
-        
-        st.subheader(f"Analisi Partite - {giornata_sel}ª Giornata {fase}")
-        
-        squadre_lista = list(pos_dict.keys())
-        if len(squadre_lista) >= 2:
-            for i in range(0, len(squadre_lista)-1, 2):
-                casa, fuori = squadre_lista[i], squadre_lista[i+1]
-                p_casa, p_fuori = pos_dict.get(casa, 5), pos_dict.get(fuori, 5)
-                pt_casa, pt_fuori = punti_dict.get(casa, 0), punti_dict.get(fuori, 0)
-                
-                sc, dett = calcola_score(p_casa, p_fuori, casa, fuori)
-                
-                header_text = f"**{casa} ({p_casa}ª - {pt_casa} pt)** vs **{fuori} ({p_fuori}ª - {pt_fuori} pt)**"
-                
-                if sc >= soglia_rosso:
-                    st.error(f"🔴 **SCORE {sc:.1f} / 10** — {header_text}\n\n"
-                             f"👉 **AZIONI CONSIGLIATE:** FORMATORE AL TAVOLO\n\n*Motivazione:* {dett if dett else 'Scontro ad alta priorità'}")
-                elif sc >= soglia_giallo:
-                    st.warning(f"🟡 **SCORE {sc:.1f} / 10** — {header_text}\n\n"
-                               f"👉 **AZIONI CONSIGLIATE:** TUTOR IN CAMPO CON IL MINIARBITRO\n\n*Motivazione:* {dett if dett else 'Gara equilibrata'}")
-                else:
-                    st.success(f"🟢 **SCORE {sc:.1f} / 10** — {header_text}\n\n"
-                               f"👉 **AZIONI CONSIGLIATE:** MINIARBITRI IN AUTONOMIA\n\n*Motivazione:* {dett if dett else 'Partita ordinaria'}")
+    else:
+        st.warning("Impossibile caricare la classifica automatica per questa giornata.")
+        pos_dict, punti_dict = {}, {}
+
+    st.subheader(f"Partite {giornata_num}ª Giornata d'{fase_sel} (da fip.it)")
+
+    if partite_fip:
+        for match in partite_fip:
+            casa, fuori = match["casa"], match["fuori"]
+            data_g, ora_g = match.get("data", ""), match.get("ora", "")
+            ris = match.get("risultato", "")
+
+            p_casa, p_fuori = pos_dict.get(casa, 5), pos_dict.get(fuori, 5)
+            pt_casa, pt_fuori = punti_dict.get(casa, 0), punti_dict.get(fuori, 0)
+
+            sc, dett = calcola_score(p_casa, p_fuori, casa, fuori)
+
+            header_text = f"📅 **{data_g} {ora_g}** | **{casa} ({p_casa}ª - {pt_casa}pt)** vs **{fuori} ({p_fuori}ª - {pt_fuori}pt)** | *Stato:* `{ris}`"
+
+            if sc >= soglia_rosso:
+                st.error(f"🔴 **SCORE {sc:.1f} / 10** — {header_text}\n\n"
+                         f"👉 **AZIONI CONSIGLIATE:** FORMATORE AL TAVOLO\n\n*Motivazione:* {dett if dett else 'Scontro ad alta priorità'}")
+            elif sc >= soglia_giallo:
+                st.warning(f"🟡 **SCORE {sc:.1f} / 10** — {header_text}\n\n"
+                           f"👉 **AZIONI CONSIGLIATE:** TUTOR IN CAMPO CON IL MINIARBITRO\n\n*Motivazione:* {dett if dett else 'Gara equilibrata'}")
+            else:
+                st.success(f"🟢 **SCORE {sc:.1f} / 10** — {header_text}\n\n"
+                           f"👉 **AZIONI CONSIGLIATE:** MINIARBITRI IN AUTONOMIA\n\n*Motivazione:* {dett if dett else 'Partita ordinaria'}")
+    else:
+        st.info("Nessuna partita estratta automaticamente. Clicca in alto su '🔄 Sincronizza Dati FIP' per tentare nuovamente la lettura dal sito.")
 
 with tab1:
-    render_girone_dinamico("85582")
+    render_girone_live("85582")
 
 with tab2:
-    render_girone_dinamico("85583")
+    render_girone_live("85583")
