@@ -1,6 +1,4 @@
 import streamlit as st
-import requests
-from bs4 import BeautifulSoup
 import pandas as pd
 
 # ---------------------------------------------------------
@@ -28,75 +26,40 @@ if not check_password():
     st.stop()
 
 # ---------------------------------------------------------
-# 2. INIZIALIZZAZIONE MEMORIA CRITICITÀ
+# 2. INIZIALIZZAZIONE MEMORIA E SQUADRE REALI
 # ---------------------------------------------------------
 if "criticita_societa" not in st.session_state:
     st.session_state["criticita_societa"] = {}
 
-# ---------------------------------------------------------
-# 3. SCRAPER PULITO E FILTRATO PER FIP.IT
-# ---------------------------------------------------------
-# Parole del sito FIP da ESCLUDERE per evitare "squadre fantasma"
-PAROLE_DA_ESCLUDERE = [
-    "SPORTELLO", "LEGALE", "FISCALE", "RIFORMA", "SPORT", "NAZIONALE", "STORIA", 
-    "RISULTATI", "ROMA", "QUALIFICAZIONE", "ANDATA", "RITORNO", "CAMPIONATI", 
-    "MASCHILI", "FEMMINILE", "GIRONE", "SQUADRA", "PUNTI", "INFO", "COMITATO", 
-    "REGIONALI", "CALENDARIO", "CLASSIFICA", "SETTORE", "GIOVANILE"
+# Elenco Ufficiale Squadre U15 Gold Lazio (estratto dal sito FIP)
+SQUADRE_A = [
+    "BASKET GUIDONIA",
+    "OLIMPIA ROMA",
+    "SUPERNOVA FIUMICINO",
+    "BASKET ROMA",
+    "SCUOLA BASKET ROMA",
+    "STELLAEBK",
+    "DON BOSCO NUOVO SALARIO",
+    "WILLIE BASKET RIETI",
+    "VIS AURELIA BK",
+    "BRACCIANO BASKET"
 ]
 
-SQUADRE_GIRONE_A = [
-    "BASKET GUIDONIA", "OLIMPIA ROMA", "SUPERNOVA FIUMICINO", 
-    "BASKET ROMA", "SCUOLA BASKET ROMA", "STELLAEBK", 
-    "DON BOSCO NUOVO SALARIO", "WILLIE BASKET RIETI", 
-    "VIS AURELIA BK", "BRACCIANO BASKET"
+SQUADRE_B = [
+    "VIRTUS ROMA BASKET",
+    "SMIT ROMA",
+    "TIBER BASKET",
+    "ALFA BASKET",
+    "SAN PAOLO OSTIENSE",
+    "ANZIO BASKET",
+    "BASKET CASSINO",
+    "LATINA BASKET",
+    "PALESTRINA",
+    "FORTITUDO ANAGNI"
 ]
-
-SQUADRE_GIRONE_B = [
-    "VIRTUS ROMA BASKET", "SMIT ROMA", "TIBER BASKET", 
-    "ALFA BASKET", "SAN PAOLO OSTIENSE", "ANZIO BASKET", 
-    "BASKET CASSINO", "LATINA BASKET", "PALESTRINA", "FORTITUDO ANAGNI"
-]
-
-@st.cache_data(ttl=900)  # Aggiorna ogni 15 minuti
-def get_fip_data(codice_girone):
-    url = f"https://fip.it/risultati/?group=campionati-regionali&regione_codice=LA&comitato_codice=RLA&sesso=M&codice_campionato=U15G/M&codice_fase=1&codice_girone={codice_girone}"
-    
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
-    
-    try:
-        response = requests.get(url, headers=headers, timeout=10)
-        classifica = {}
-        
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.content, "html.parser")
-            pos = 1
-            
-            # Cerca il testo pulito ignorando i menu di navigazione
-            elements = soup.find_all(["div", "td", "span"])
-            for el in elements:
-                txt = el.text.strip().upper()
-                # Considera solo le stringhe che non sono nei menu e non sono giornate d'andata/ritorno
-                if len(txt) > 3 and not txt.isdigit() and "ANDATA" not in txt and "RITORNO" not in txt:
-                    if not any(p in txt for p in PAROLE_DA_ESCLUDERE):
-                        if txt not in classifica:
-                            classifica[txt] = pos
-                            pos += 1
-        
-        # Fallback di pulizia: usa le squadre reali se lo scraping cattura testo di navigazione
-        squadre_riferimento = SQUADRE_GIRONE_A if codice_girone == "85582" else SQUADRE_GIRONE_B
-        
-        if not classifica or len(classifica) < 5 or any("SPORTELLO" in k for k in classifica.keys()):
-            classifica = {sq: i+1 for i, sq in enumerate(squadre_riferimento)}
-            
-        return classifica, None
-    except Exception as e:
-        squadre_riferimento = SQUADRE_GIRONE_A if codice_girone == "85582" else SQUADRE_GIRONE_B
-        return {sq: i+1 for i, sq in enumerate(squadre_riferimento)}, None
 
 # ---------------------------------------------------------
-# 4. PANNELLO IMPOSTAZIONI (SIDEBAR)
+# 3. PANNELLO IMPOSTAZIONI (SIDEBAR)
 # ---------------------------------------------------------
 st.sidebar.header("⚙️ Impostazioni Algoritmo")
 
@@ -111,7 +74,8 @@ soglia_giallo = st.sidebar.slider("Soglia Tutor in Campo (Giallo)", 4.0, 7.9, 6.
 
 st.sidebar.markdown("---")
 st.sidebar.header("⚠️ Aggiungi Criticità Società")
-nuova_societa = st.sidebar.text_input("Nome Squadra/Società:")
+tutte_le_squadre = sorted(list(set(SQUADRE_A + SQUADRE_B)))
+nuova_societa = st.sidebar.selectbox("Seleziona Squadra:", tutte_le_squadre)
 livello_crit = st.sidebar.selectbox("Livello Criticità", ["Normale (+0)", "Media (+2.0)", "Alta (+4.0)"])
 nota_crit = st.sidebar.text_input("Nota (es. Pubblico caldo):")
 
@@ -123,10 +87,10 @@ if st.sidebar.button("Salva Criticità"):
     st.sidebar.success(f"Salvata criticità per {nuova_societa}")
 
 # ---------------------------------------------------------
-# 5. MAIN DASHBOARD
+# 4. CALCOLO E MAIN DASHBOARD
 # ---------------------------------------------------------
 st.title("🏀 Dashboard Designazione CIA - U15 Gold Lazio")
-st.markdown("Analisi automatica e valutazione criticità gare basata su dati FIP Lazio.")
+st.markdown("Valutazione criticità gare e supporto designazioni miniarbitri.")
 
 tab1, tab2 = st.tabs(["📌 Girone A (85582)", "📌 Girone B (85583)"])
 
@@ -136,11 +100,11 @@ def calcola_score(pos_casa, pos_fuori, casa_name, fuori_name):
     
     if pos_casa <= 4 and pos_fuori <= 4:
         score += weight_vertice
-        dettagli.append("Sfida al vertice")
+        dettagli.append("Sfida al vertice (1ª-4ª pos)")
         
     if (6 <= pos_casa <= 10) and (6 <= pos_fuori <= 10):
         score += weight_playoff
-        dettagli.append("Scontro diretto Zona Taglio Playoff")
+        dettagli.append("Scontro diretto Zona Taglio Playoff (6ª-10ª pos)")
         
     if abs(pos_casa - pos_fuori) <= 2:
         score += weight_pari
@@ -152,38 +116,37 @@ def calcola_score(pos_casa, pos_fuori, casa_name, fuori_name):
     extra = crit_casa["punti"] + crit_fuori["punti"]
     if extra > 0:
         score += extra
-        note = f"Criticità segnalata: {crit_casa['nota']} {crit_fuori['nota']}".strip()
-        dettagli.append(note)
+        note_str = f"{crit_casa['nota']} {crit_fuori['nota']}".strip()
+        dettagli.append(f"Criticità societaria: {note_str}")
         
     return min(score, 10.0), ", ".join(dettagli)
 
-def render_girone(codice):
-    classifica, _ = get_fip_data(codice)
+def render_girone(squadre_list):
+    classifica = {sq: i+1 for i, sq in enumerate(squadre_list)}
 
-    st.subheader("Classifica Attuale")
+    st.subheader("Classifica Squadre")
     df_class = pd.DataFrame(list(classifica.items()), columns=["Squadra", "Posizione"])
     st.dataframe(df_class, use_container_width=True)
 
     st.subheader("Analisi Prossime Gare e Criticità")
-    squadre = list(classifica.keys())
-    if len(squadre) >= 2:
-        for i in range(0, len(squadre)-1, 2):
-            casa, fuori = squadre[i], squadre[i+1]
-            p_casa, p_fuori = classifica[casa], classifica[fuori]
-            sc, dett = calcola_score(p_casa, p_fuori, casa, fuori)
-            
-            if sc >= soglia_rosso:
-                st.error(f"🔴 **SCORE {sc:.1f} / 10** | **{casa} ({p_casa}ª)** vs **{fuori} ({p_fuori}ª)**\n\n"
-                         f"👉 **AZIONI CONSIGLIATE:** FORMATORE AL TAVOLO\n\n*Motivazione:* {dett if dett else 'Scontro diretto ad alta criticità'}")
-            elif sc >= soglia_giallo:
-                st.warning(f"🟡 **SCORE {sc:.1f} / 10** | **{casa} ({p_casa}ª)** vs **{fuori} ({p_fuori}ª)**\n\n"
-                           f"👉 **AZIONI CONSIGLIATE:** TUTOR IN CAMPO CON IL MINIARBITRO\n\n*Motivazione:* {dett if dett else 'Gara equilibrata'}")
-            else:
-                st.success(f"🟢 **SCORE {sc:.1f} / 10** | **{casa} ({p_casa}ª)** vs **{fuori} ({p_fuori}ª)**\n\n"
-                           f"👉 **AZIONI CONSIGLIATE:** MINIARBITRI IN AUTONOMIA\n\n*Motivazione:* {dett if dett else 'Partita ordinaria'}")
+    
+    for i in range(0, len(squadre_list)-1, 2):
+        casa, fuori = squadre_list[i], squadre_list[i+1]
+        p_casa, p_fuori = classifica[casa], classifica[fuori]
+        sc, dett = calcola_score(p_casa, p_fuori, casa, fuori)
+        
+        if sc >= soglia_rosso:
+            st.error(f"🔴 **SCORE {sc:.1f} / 10** | **{casa} ({p_casa}ª)** vs **{fuori} ({p_fuori}ª)**\n\n"
+                     f"👉 **AZIONI CONSIGLIATE:** FORMATORE AL TAVOLO\n\n*Motivazione:* {dett if dett else 'Scontro ad alta priorità'}")
+        elif sc >= soglia_giallo:
+            st.warning(f"🟡 **SCORE {sc:.1f} / 10** | **{casa} ({p_casa}ª)** vs **{fuori} ({p_fuori}ª)**\n\n"
+                       f"👉 **AZIONI CONSIGLIATE:** TUTOR IN CAMPO CON IL MINIARBITRO\n\n*Motivazione:* {dett if dett else 'Gara equilibrata'}")
+        else:
+            st.success(f"🟢 **SCORE {sc:.1f} / 10** | **{casa} ({p_casa}ª)** vs **{fuori} ({p_fuori}ª)**\n\n"
+                       f"👉 **AZIONI CONSIGLIATE:** MINIARBITRI IN AUTONOMIA\n\n*Motivazione:* {dett if dett else 'Partita ordinaria'}")
 
 with tab1:
-    render_girone("85582")
+    render_girone(SQUADRE_A)
 
 with tab2:
-    render_girone("85583")
+    render_girone(SQUADRE_B)
