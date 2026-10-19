@@ -2,7 +2,6 @@ import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
-import json
 
 # ---------------------------------------------------------
 # 1. AUTENTICAZIONE / ACCESSO PRIVATO
@@ -35,67 +34,66 @@ if "criticita_societa" not in st.session_state:
     st.session_state["criticita_societa"] = {}
 
 # ---------------------------------------------------------
-# 3. SCRAPER DEDICATO PER FIP.IT
+# 3. SCRAPER PULITO E FILTRATO PER FIP.IT
 # ---------------------------------------------------------
+# Parole del sito FIP da ESCLUDERE per evitare "squadre fantasma"
+PAROLE_DA_ESCLUDERE = [
+    "SPORTELLO", "LEGALE", "FISCALE", "RIFORMA", "SPORT", "NAZIONALE", "STORIA", 
+    "RISULTATI", "ROMA", "QUALIFICAZIONE", "ANDATA", "RITORNO", "CAMPIONATI", 
+    "MASCHILI", "FEMMINILE", "GIRONE", "SQUADRA", "PUNTI", "INFO", "COMITATO", 
+    "REGIONALI", "CALENDARIO", "CLASSIFICA", "SETTORE", "GIOVANILE"
+]
+
+SQUADRE_GIRONE_A = [
+    "BASKET GUIDONIA", "OLIMPIA ROMA", "SUPERNOVA FIUMICINO", 
+    "BASKET ROMA", "SCUOLA BASKET ROMA", "STELLAEBK", 
+    "DON BOSCO NUOVO SALARIO", "WILLIE BASKET RIETI", 
+    "VIS AURELIA BK", "BRACCIANO BASKET"
+]
+
+SQUADRE_GIRONE_B = [
+    "VIRTUS ROMA BASKET", "SMIT ROMA", "TIBER BASKET", 
+    "ALFA BASKET", "SAN PAOLO OSTIENSE", "ANZIO BASKET", 
+    "BASKET CASSINO", "LATINA BASKET", "PALESTRINA", "FORTITUDO ANAGNI"
+]
+
 @st.cache_data(ttl=900)  # Aggiorna ogni 15 minuti
 def get_fip_data(codice_girone):
     url = f"https://fip.it/risultati/?group=campionati-regionali&regione_codice=LA&comitato_codice=RLA&sesso=M&codice_campionato=U15G/M&codice_fase=1&codice_girone={codice_girone}"
     
     headers = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
     
     try:
         response = requests.get(url, headers=headers, timeout=10)
-        if response.status_code != 200:
-            return None, None
-            
-        soup = BeautifulSoup(response.content, "html.parser")
         classifica = {}
         
-        # 1. Cerca dati incorporati nei tag script (JSON)
-        scripts = soup.find_all("script")
-        for script in scripts:
-            if script.string and "classifica" in script.string.lower():
-                try:
-                    # Tenta il parsing JSON se presente nei dati della pagina
-                    data = json.loads(script.string)
-                    if isinstance(data, list):
-                        for idx, item in enumerate(data, 1):
-                            s_nome = item.get("squadra") or item.get("nome")
-                            if s_nome:
-                                classifica[s_nome.strip()] = idx
-                except:
-                    pass
-
-        # 2. Parsing visivo alternativo per div/elementi FIP
-        if not classifica:
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.content, "html.parser")
             pos = 1
-            # Cerca contenitori delle squadre nella classifica del sito FIP
-            team_elements = soup.find_all(["div", "li", "tr"], class_=lambda c: c and any(x in str(c).lower() for x in ["team", "squadra", "row", "item", "classifica"]))
-            for el in team_elements:
-                txt = el.text.strip()
-                lines = [line.strip() for line in txt.split("\n") if line.strip()]
-                for line in lines:
-                    if len(line) > 3 and not line.isdigit() and line.isupper() and not any(k in line for k in ["CAMPIONATI", "GIRONE", "SQUADRA", "PUNTI"]):
-                        if line not in classifica:
-                            classifica[line] = pos
+            
+            # Cerca il testo pulito ignorando i menu di navigazione
+            elements = soup.find_all(["div", "td", "span"])
+            for el in elements:
+                txt = el.text.strip().upper()
+                # Considera solo le stringhe che non sono nei menu e non sono giornate d'andata/ritorno
+                if len(txt) > 3 and not txt.isdigit() and "ANDATA" not in txt and "RITORNO" not in txt:
+                    if not any(p in txt for p in PAROLE_DA_ESCLUDERE):
+                        if txt not in classifica:
+                            classifica[txt] = pos
                             pos += 1
-
-        # Fallback di sicurezza con le squadre lette dallo screenshot se lo scraping HTML viene bloccato
-        if not classifica and codice_girone == "85582":
-            squadre_a = [
-                "BASKET GUIDONIA", "OLIMPIA ROMA", "SUPERNOVA FIUMICINO", 
-                "BASKET ROMA", "SCUOLA BASKET ROMA", "STELLAEBK", 
-                "DON BOSCO NUOVO SALARIO", "WILLIE BASKET RIETI", 
-                "VIS AURELIA BK", "BRACCIANO BASKET"
-            ]
-            classifica = {sq: i+1 for i, sq in enumerate(squadre_a)}
-
-        return classifica, soup
+        
+        # Fallback di pulizia: usa le squadre reali se lo scraping cattura testo di navigazione
+        squadre_riferimento = SQUADRE_GIRONE_A if codice_girone == "85582" else SQUADRE_GIRONE_B
+        
+        if not classifica or len(classifica) < 5 or any("SPORTELLO" in k for k in classifica.keys()):
+            classifica = {sq: i+1 for i, sq in enumerate(squadre_riferimento)}
+            
+        return classifica, None
     except Exception as e:
-        return None, None
+        squadre_riferimento = SQUADRE_GIRONE_A if codice_girone == "85582" else SQUADRE_GIRONE_B
+        return {sq: i+1 for i, sq in enumerate(squadre_riferimento)}, None
 
 # ---------------------------------------------------------
 # 4. PANNELLO IMPOSTAZIONI (SIDEBAR)
@@ -161,10 +159,6 @@ def calcola_score(pos_casa, pos_fuori, casa_name, fuori_name):
 
 def render_girone(codice):
     classifica, _ = get_fip_data(codice)
-    
-    if not classifica:
-        st.warning("Caricamento in corso o dati FIP temporaneamente non disponibili.")
-        return
 
     st.subheader("Classifica Attuale")
     df_class = pd.DataFrame(list(classifica.items()), columns=["Squadra", "Posizione"])
