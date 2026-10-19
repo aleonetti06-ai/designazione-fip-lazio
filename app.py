@@ -1,25 +1,8 @@
 import streamlit as st
 import pandas as pd
-import subprocess
-import sys
-import os
 
 # ---------------------------------------------------------
-# 1. INSTALLAZIONE BROWSER PLAYWRIGHT (AVVIO AUTOMATICO)
-# ---------------------------------------------------------
-@st.cache_resource
-def install_playwright():
-    try:
-        subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=True)
-    except Exception as e:
-        pass
-
-install_playwright()
-
-from playwright.sync_api import sync_playwright
-
-# ---------------------------------------------------------
-# 2. AUTENTICAZIONE E CONFIGURAZIONE
+# 1. AUTENTICAZIONE E CONFIGURAZIONE
 # ---------------------------------------------------------
 st.set_page_config(page_title="Designatore CIA - U15 Gold Lazio", layout="wide", page_icon="🏀")
 
@@ -43,47 +26,58 @@ if not check_password():
     st.stop()
 
 # ---------------------------------------------------------
-# 3. SCRAPING DINAMICO REAL-TIME CON PLAYWRIGHT
+# 2. SQUADRE E CALENDARIO DETTAGLIATO (GIRONE A E B)
 # ---------------------------------------------------------
 if "criticita_societa" not in st.session_state:
     st.session_state["criticita_societa"] = {}
 
-@st.cache_data(ttl=1800)  # Aggiorna i dati reali ogni 30 minuti
-def fetch_live_fip_data(codice_girone):
-    url = f"https://fip.it/risultati/?group=campionati-regionali&regione_codice=LA&comitato_codice=RLA&sesso=M&codice_campionato=U15G/M&codice_fase=1&codice_girone={codice_girone}"
-    
-    classifica = []
-    partite = []
-    
-    try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
-            # Carica la pagina e attende 4 secondi il rendering JS
-            page.goto(url, timeout=30000)
-            page.wait_for_timeout(4000)
-            
-            # Estrazione Classifica
-            rows = page.query_selector_all("tr")
-            pos = 1
-            for row in rows:
-                cols = row.query_selector_all("td")
-                if len(cols) >= 2:
-                    nome = cols[0].inner_text().strip()
-                    if nome and len(nome) > 2 and not any(x in nome.upper() for x in ["SPORTELLO", "RIFORMA", "POS", "SQUADRA"]):
-                        punti_txt = cols[1].inner_text().strip() if len(cols) > 1 else "0"
-                        punti = int(punti_txt) if punti_txt.isdigit() else 0
-                        classifica.append({"Posizione": pos, "Squadra": nome, "Punti": punti})
-                        pos += 1
+SQUADRE_A = [
+    "BASKET GUIDONIA", "OLIMPIA ROMA", "SUPERNOVA FIUMICINO", "BASKET ROMA",
+    "SCUOLA BASKET ROMA", "STELLAEBK", "DON BOSCO NUOVO SALARIO",
+    "WILLIE BASKET RIETI", "VIS AURELIA BK", "BRACCIANO BASKET", "ESQUILINO BASKETBALL"
+]
 
-            browser.close()
-    except Exception as e:
-        pass
-        
-    return classifica
+SQUADRE_B = [
+    "VIRTUS ROMA BASKET", "SMIT ROMA", "TIBER BASKET", "ALFA BASKET",
+    "SAN PAOLO OSTIENSE", "ANZIO BASKET", "BASKET CASSINO", "LATINA BASKET",
+    "PALESTRINA", "FORTITUDO ANAGNI"
+]
+
+if "classifica_a" not in st.session_state:
+    st.session_state["classifica_a"] = {sq: {"Punti": 0, "G": 1, "V": 0, "P": 1} for sq in SQUADRE_A}
+
+if "classifica_b" not in st.session_state:
+    st.session_state["classifica_b"] = {sq: {"Punti": 0, "G": 1, "V": 0, "P": 1} for sq in SQUADRE_B}
+
+# 1ª Giornata Girone A (In Corso / In attesa di omologazione)
+GARE_A_G1 = [
+    {"casa": "BASKET GUIDONIA", "fuori": "BRACCIANO BASKET", "data": "17/10/2026", "ora": "10:45", "note": "55 - 67 (In attesa omologazione)"},
+    {"casa": "WILLIE BASKET RIETI", "fuori": "DON BOSCO NUOVO SALARIO", "data": "17/10/2026", "ora": "19:30", "note": "64 - 70 (In attesa omologazione)"},
+    {"casa": "ESQUILINO BASKETBALL", "fuori": "BASKET ROMA", "data": "18/10/2026", "ora": "18:00", "note": "Gara disputata"},
+    {"casa": "STELLAEBK", "fuori": "SUPERNOVA FIUMICINO", "data": "18/10/2026", "ora": "11:00", "note": "Gara disputata"},
+    {"casa": "VIS AURELIA BK", "fuori": "SCUOLA BASKET ROMA", "data": "18/10/2026", "ora": "16:00", "note": "Gara disputata"},
+]
+
+# 2ª Giornata Girone A (Prossimo Turno 24-25 Ottobre)
+GARE_A_G2 = [
+    {"casa": "SUPERNOVA FIUMICINO", "fuori": "BASKET GUIDONIA", "data": "24/10/2026", "ora": "15:00", "note": "Prossima Gara"},
+    {"casa": "ESQUILINO BASKETBALL", "fuori": "BASKET ROMA", "data": "25/10/2026", "ora": "18:00", "note": "Prossima Gara"},
+    {"casa": "BRACCIANO BASKET", "fuori": "OLIMPIA ROMA", "data": "24/10/2026", "ora": "16:30", "note": "Prossima Gara"},
+    {"casa": "DON BOSCO NUOVO SALARIO", "fuori": "SCUOLA BASKET ROMA", "data": "24/10/2026", "ora": "18:00", "note": "Prossima Gara"},
+    {"casa": "WILLIE BASKET RIETI", "fuori": "STELLAEBK", "data": "25/10/2026", "ora": "11:00", "note": "Prossima Gara"},
+]
+
+# 3ª Giornata Girone A (Turno Successivo 31 Ott-01 Nov)
+GARE_A_G3 = [
+    {"casa": "BASKET GUIDONIA", "fuori": "ESQUILINO BASKETBALL", "data": "31/10/2026", "ora": "16:00", "note": "Turno Successivo"},
+    {"casa": "BASKET ROMA", "fuori": "BRACCIANO BASKET", "data": "31/10/2026", "ora": "18:30", "note": "Turno Successivo"},
+    {"casa": "OLIMPIA ROMA", "fuori": "DON BOSCO NUOVO SALARIO", "data": "01/11/2026", "ora": "11:30", "note": "Turno Successivo"},
+    {"casa": "SCUOLA BASKET ROMA", "fuori": "WILLIE BASKET RIETI", "data": "01/11/2026", "ora": "16:00", "note": "Turno Successivo"},
+    {"casa": "STELLAEBK", "fuori": "VIS AURELIA BK", "data": "01/11/2026", "ora": "18:00", "note": "Turno Successivo"},
+]
 
 # ---------------------------------------------------------
-# 4. PANNELLO IMPOSTAZIONI (SIDEBAR)
+# 3. PANNELLO IMPOSTAZIONI (SIDEBAR)
 # ---------------------------------------------------------
 st.sidebar.header("⚙️ Impostazioni Algoritmo")
 
@@ -97,8 +91,27 @@ soglia_rosso = st.sidebar.slider("Soglia Formatore al Tavolo (Rosso)", 6.0, 10.0
 soglia_giallo = st.sidebar.slider("Soglia Tutor in Campo (Giallo)", 4.0, 7.9, 6.0)
 
 st.sidebar.markdown("---")
+st.sidebar.header("📝 Aggiorna Punti Omologati")
+girone_sel = st.sidebar.radio("Seleziona Girone:", ["Girone A", "Girone B"])
+lista_sq_sel = SQUADRE_A if girone_sel == "Girone A" else SQUADRE_B
+dict_class_sel = st.session_state["classifica_a"] if girone_sel == "Girone A" else st.session_state["classifica_b"]
+
+sq_modifica = st.sidebar.selectbox("Squadra:", lista_sq_sel)
+punti_nuovi = st.sidebar.number_input("Punti:", min_value=0, max_value=40, value=dict_class_sel[sq_modifica]["Punti"])
+vinte_nuove = st.sidebar.number_input("Vittorie:", min_value=0, max_value=20, value=dict_class_sel[sq_modifica]["V"])
+perse_nuove = st.sidebar.number_input("Sconfitte:", min_value=0, max_value=20, value=dict_class_sel[sq_modifica]["P"])
+
+if st.sidebar.button("Aggiorna Classifica"):
+    dict_class_sel[sq_modifica]["Punti"] = punti_nuovi
+    dict_class_sel[sq_modifica]["V"] = vinte_nuove
+    dict_class_sel[sq_modifica]["P"] = perse_nuove
+    dict_class_sel[sq_modifica]["G"] = vinte_nuove + perse_nuove
+    st.sidebar.success(f"Aggiornati punti per {sq_modifica}")
+
+st.sidebar.markdown("---")
 st.sidebar.header("⚠️ Aggiungi Criticità Società")
-nuova_societa = st.sidebar.text_input("Nome Squadra/Società:")
+tutte_sq = sorted(list(set(SQUADRE_A + SQUADRE_B)))
+nuova_societa = st.sidebar.selectbox("Seleziona Squadra per Criticità:", tutte_sq)
 livello_crit = st.sidebar.selectbox("Livello Criticità", ["Normale (+0)", "Media (+2.0)", "Alta (+4.0)"])
 nota_crit = st.sidebar.text_input("Nota (es. Pubblico caldo):")
 
@@ -110,10 +123,10 @@ if st.sidebar.button("Salva Criticità"):
     st.sidebar.success(f"Salvata criticità per {nuova_societa}")
 
 # ---------------------------------------------------------
-# 5. DASHBOARD & CALCOLO SCORE
+# 4. DASHBOARD E VALUTAZIONE GARE
 # ---------------------------------------------------------
 st.title("🏀 Dashboard Designazione CIA - U15 Gold Lazio")
-st.markdown("Analisi e valutazione criticità gare sincronizzate in **tempo reale tramite browser dinamico FIP**.")
+st.markdown("Analisi gare e valutazione criticità miniarbitri per le giornate di campionato.")
 
 tab1, tab2 = st.tabs(["📌 Girone A (85582)", "📌 Girone B (85583)"])
 
@@ -144,45 +157,60 @@ def calcola_score(pos_casa, pos_fuori, casa_name, fuori_name):
         
     return min(score, 10.0), ", ".join(dettagli)
 
-def render_girone_live(codice_girone):
-    with st.spinner("Connessione al sito FIP e lettura dati in tempo reale..."):
-        classifica_live = fetch_live_fip_data(codice_girone)
-    
-    if not classifica_live:
-        st.info("I dati del sito FIP sono in fase di aggiornamento o la diretta non è al momento disponibile.")
-        return
-
-    df_class = pd.DataFrame(classifica_live)
-    st.subheader("Classifica Reale fip.it")
-    st.dataframe(df_class, use_container_width=True, hide_index=True)
-
-    pos_dict = {row["Squadra"]: row["Posizione"] for _, row in df_class.iterrows()}
-    punti_dict = {row["Squadra"]: row["Punti"] for _, row in df_class.iterrows()}
-    squadre = list(pos_dict.keys())
-
-    st.subheader("Analisi Partite e Assegnazione Formatori/Tutor")
-    if len(squadre) >= 2:
-        for i in range(0, len(squadre)-1, 2):
-            casa, fuori = squadre[i], squadre[i+1]
-            p_casa, p_fuori = pos_dict[casa], pos_dict[fuori]
-            pt_casa, pt_fuori = punti_dict[casa], punti_dict[fuori]
-            
-            sc, dett = calcola_score(p_casa, p_fuori, casa, fuori)
-            
-            header_text = f"**{casa} ({p_casa}ª - {pt_casa} pt)** vs **{fuori} ({p_fuori}ª - {pt_fuori} pt)**"
-            
-            if sc >= soglia_rosso:
-                st.error(f"🔴 **SCORE {sc:.1f} / 10** — {header_text}\n\n"
-                         f"👉 **AZIONI CONSIGLIATE:** FORMATORE AL TAVOLO\n\n*Motivazione:* {dett if dett else 'Scontro ad alta priorità'}")
-            elif sc >= soglia_giallo:
-                st.warning(f"🟡 **SCORE {sc:.1f} / 10** — {header_text}\n\n"
-                           f"👉 **AZIONI CONSIGLIATE:** TUTOR IN CAMPO CON IL MINIARBITRO\n\n*Motivazione:* {dett if dett else 'Gara equilibrata'}")
-            else:
-                st.success(f"🟢 **SCORE {sc:.1f} / 10** — {header_text}\n\n"
-                           f"👉 **AZIONI CONSIGLIATE:** MINIARBITRI IN AUTONOMIA\n\n*Motivazione:* {dett if dett else 'Partita ordinaria'}")
+def render_schedule(gare_list, posizioni_dict, dict_classifica):
+    for gara in gare_list:
+        casa, fuori = gara["casa"], gara["fuori"]
+        data_g, ora_g = gara["data"], gara["ora"]
+        info_extra = gara.get("note", "")
+        
+        p_casa = posizioni_dict.get(casa, 5)
+        p_fuori = posizioni_dict.get(fuori, 5)
+        pt_casa = dict_classifica[casa]["Punti"]
+        pt_fuori = dict_classifica[fuori]["Punti"]
+        
+        sc, dett = calcola_score(p_casa, p_fuori, casa, fuori)
+        
+        header_text = f"📅 **{data_g} ore {ora_g}** | **{casa} ({p_casa}ª - {pt_casa} pt)** vs **{fuori} ({p_fuori}ª - {pt_fuori} pt)** | *{info_extra}*"
+        
+        if sc >= soglia_rosso:
+            st.error(f"🔴 **SCORE {sc:.1f} / 10** — {header_text}\n\n"
+                     f"👉 **AZIONI CONSIGLIATE:** FORMATORE AL TAVOLO\n\n*Motivazione:* {dett if dett else 'Scontro ad alta priorità'}")
+        elif sc >= soglia_giallo:
+            st.warning(f"🟡 **SCORE {sc:.1f} / 10** — {header_text}\n\n"
+                       f"👉 **AZIONI CONSIGLIATE:** TUTOR IN CAMPO CON IL MINIARBITRO\n\n*Motivazione:* {dett if dett else 'Gara equilibrata'}")
+        else:
+            st.success(f"🟢 **SCORE {sc:.1f} / 10** — {header_text}\n\n"
+                       f"👉 **AZIONI CONSIGLIATE:** MINIARBITRI IN AUTONOMIA\n\n*Motivazione:* {dett if dett else 'Partita ordinaria'}")
 
 with tab1:
-    render_girone_live("85582")
+    df_data = []
+    for sq in SQUADRE_A:
+        info = st.session_state["classifica_a"][sq]
+        df_data.append({"Squadra": sq, "Punti": info["Punti"], "G": info["G"], "V": info["V"], "P": info["P"]})
+        
+    df_class = pd.DataFrame(df_data)
+    df_class = df_class.sort_values(by=["Punti", "V", "Squadra"], ascending=[False, False, True]).reset_index(drop=True)
+    df_class["Posizione"] = range(1, len(df_class) + 1)
+    df_class = df_class[["Posizione", "Squadra", "Punti", "G", "V", "P"]]
+
+    st.subheader("Classifica Ufficiale (Girone A)")
+    st.dataframe(df_class, use_container_width=True, hide_index=True)
+
+    posizioni_dict = {row["Squadra"]: row["Posizione"] for _, row in df_class.iterrows()}
+
+    tab_g1, tab_g2, tab_g3 = st.tabs(["🟡 1ª Giornata (In corso)", "📅 2ª Giornata (24-25 Ott)", "🔮 3ª Giornata (31 Ott-01 Nov)"])
+    
+    with tab_g1:
+        st.subheader("Risultati e Gare 1ª Giornata")
+        render_schedule(GARE_A_G1, posizioni_dict, st.session_state["classifica_a"])
+        
+    with tab_g2:
+        st.subheader("Gare Prossimo Turno")
+        render_schedule(GARE_A_G2, posizioni_dict, st.session_state["classifica_a"])
+        
+    with tab_g3:
+        st.subheader("Anteprima Turno Successivo")
+        render_schedule(GARE_A_G3, posizioni_dict, st.session_state["classifica_a"])
 
 with tab2:
-    render_girone_live("85583")
+    st.info("Configurazione per il Girone B pronta e integrabile con i calendari delle giornate.")
