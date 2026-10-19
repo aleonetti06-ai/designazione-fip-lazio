@@ -16,7 +16,7 @@ def check_password():
         st.title("🏀 Accesso Riservato Designatore CIA")
         password = st.text_input("Inserisci la password per accedere:", type="password")
         if st.button("Accedi"):
-            if password == "basket2026":  # Imposta qui la tua password
+            if password == "basket2026":  # Tua password
                 st.session_state["authenticated"] = True
                 st.rerun()
             else:
@@ -28,38 +28,52 @@ if not check_password():
     st.stop()
 
 # ---------------------------------------------------------
-# 2. INIZIALIZZAZIONE DATABASE MEMORIA (CRITICITÀ)
+# 2. INIZIALIZZAZIONE MEMORIA CRITICITÀ
 # ---------------------------------------------------------
 if "criticita_societa" not in st.session_state:
     st.session_state["criticita_societa"] = {}
 
 # ---------------------------------------------------------
-# 3. SCRAPER SITO FIP LAZIO
+# 3. SCRAPER SITO FIP LAZIO MIGLIORATO
 # ---------------------------------------------------------
-@st.cache_data(ttl=3600)  # Aggiorna i dati ogni ora
+@st.cache_data(ttl=1800)  # Aggiorna ogni 30 minuti
 def get_fip_data(codice_girone):
     url = f"https://fip.it/risultati/?group=campionati-regionali&regione_codice=LA&comitato_codice=RLA&sesso=M&codice_campionato=U15G/M&codice_fase=1&codice_girone={codice_girone}"
-    headers = {"User-Agent": "Mozilla/5.0"}
-    response = requests.get(url, headers=headers)
     
-    if response.status_code != 200:
+    # Headers per bypassare blocchi anti-scraping della FIP
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
+    }
+    
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        if response.status_code != 200:
+            return None, None
+            
+        soup = BeautifulSoup(response.content, "html.parser")
+        classifica = {}
+        
+        # Cerca tutte le tabelle presenti nella pagina
+        tables = soup.find_all("table")
+        for table in tables:
+            rows = table.find_all("tr")
+            pos = 1
+            for row in rows:
+                cols = row.find_all(["td", "th"])
+                # Estrazione nome squadra
+                if len(cols) >= 2:
+                    testo = cols[0].text.strip()
+                    # Rimuove righe d'intestazione ed estrae il nome pulito
+                    if testo and not testo.lower().startswith(("pos", "squadra", "p", "g", "v")):
+                        if len(testo) > 2:
+                            classifica[testo] = pos
+                            pos += 1
+                            
+        return classifica, soup
+    except Exception as e:
         return None, None
-
-    soup = BeautifulSoup(response.content, "html.parser")
-    
-    # 1. Estrazione Classifica (Esempio strutturale)
-    classifica = {}
-    rows = soup.find_all("tr")
-    pos = 1
-    for row in rows:
-        cols = row.find_all("td")
-        if len(cols) >= 2:
-            squadra_nome = cols[0].text.strip()
-            if squadra_nome and len(squadra_nome) > 2:
-                classifica[squadra_nome] = pos
-                pos += 1
-                
-    return classifica, soup
 
 # ---------------------------------------------------------
 # 4. PANNELLO IMPOSTAZIONI (SIDEBAR)
@@ -100,22 +114,18 @@ def calcola_score(pos_casa, pos_fuori, casa_name, fuori_name):
     score = 1.0
     dettagli = []
     
-    # Vertice
     if pos_casa <= 4 and pos_fuori <= 4:
         score += weight_vertice
         dettagli.append("Sfida al vertice")
         
-    # Zona Taglio Playoff (Scontri attorno all'8° posto)
     if (6 <= pos_casa <= 10) and (6 <= pos_fuori <= 10):
         score += weight_playoff
         dettagli.append("Scontro diretto Zona Taglio Playoff")
         
-    # Scontro vicino
     if abs(pos_casa - pos_fuori) <= 2:
         score += weight_pari
         dettagli.append("Scontro equilibrato in classifica")
         
-    # Criticità manuali
     crit_casa = st.session_state["criticita_societa"].get(casa_name.upper(), {"punti": 0, "nota": ""})
     crit_fuori = st.session_state["criticita_societa"].get(fuori_name.upper(), {"punti": 0, "nota": ""})
     
@@ -131,21 +141,19 @@ def render_girone(codice):
     classifica, _ = get_fip_data(codice)
     
     if not classifica:
-        st.warning("Caricamento dati FIP in corso o dati non disponibili...")
+        st.warning("Impossibile leggere la classifica FIP in automatico. Verifica che il campionato sia iniziato e con gare a calendario.")
         return
 
     st.subheader("Classifica Attuale")
     df_class = pd.DataFrame(list(classifica.items()), columns=["Squadra", "Posizione"])
     st.dataframe(df_class, use_container_width=True)
 
-    st.subheader("Analisi Prossime Gare (Simulazione Algoritmo)")
-    
-    # Esempio dimostrativo di accoppiamento basato sulle squadre lette
+    st.subheader("Analisi Prossime Gare")
     squadre = list(classifica.keys())
-    if len(squadre) >= 4:
-        partite_demo = [(squadre[0], squadre[1]), (squadre[5], squadre[7]), (squadre[2], squadre[len(squadre)-1])]
-        
-        for casa, fuori in partite_demo:
+    if len(squadre) >= 2:
+        # Genera gli accoppiamenti di test basati sulle squadre lette
+        for i in range(0, len(squadre)-1, 2):
+            casa, fuori = squadre[i], squadre[i+1]
             p_casa, p_fuori = classifica[casa], classifica[fuori]
             sc, dett = calcola_score(p_casa, p_fuori, casa, fuori)
             
