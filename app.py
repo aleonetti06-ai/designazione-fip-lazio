@@ -9,6 +9,7 @@ import streamlit as st
 from designazione.domain import COMPETITION, GROUPS, Acquisition, Criticism, RoundKey
 from designazione.fip import SourceCache, source_url
 from designazione.history import remember_signal
+from designazione.history_ui import history_status, sync_history
 from designazione.scoring import ScoringSettings, assess_match
 from designazione.storage import export_notes, import_notes
 from designazione.views import history_view, now_rome, weekly_view
@@ -195,8 +196,8 @@ def render_matches(
         "L'omologazione viene indicata solo se lo stato FIP è «omologata»."
     )
     st.caption(
-        "Le priorità gialle e rosse vengono salvate automaticamente nello storico della sessione. "
-        "Esporta il backup per conservarle."
+        "Le priorità gialle e rosse vengono aggiunte automaticamente allo storico. "
+        "Lo stato del salvataggio è indicato nel menu laterale."
     )
     for match in page.matches:
         day = match.day.strftime("%d/%m/%Y") if match.day else "Data non disponibile"
@@ -280,13 +281,16 @@ def main() -> None:
     if st.sidebar.button("Esci"):
         st.session_state["authenticated"] = False
         st.rerun()
+    sync_history()
     if st.session_state.pop("history_saved", False):
-        st.success("Storico aggiornato nella sessione. Scarica il backup per conservarlo.")
+        st.info("Storico aggiornato. Verifica lo stato del salvataggio nel menu laterale.")
     if view == "📅 Vista settimanale":
         weekly_view(settings)
+        history_status()
         return
     if view == "📚 Storico gare attenzionate":
         history_view()
+        history_status()
         return
     group = st.sidebar.selectbox("Girone", list(GROUPS), format_func=lambda g: f"{GROUPS[g]} ({g})")
     leg = st.sidebar.selectbox("Fase", [1, 0], format_func=lambda v: "Andata" if v else "Ritorno")
@@ -309,6 +313,7 @@ def main() -> None:
     acquisition_status(acquisition, key)
     page = acquisition.page
     if page is None:
+        history_status()
         return
     st.subheader("Classifica pubblicata da FIP")
     st.dataframe(
@@ -343,6 +348,7 @@ def main() -> None:
             hide_index=True,
             use_container_width=True,
         )
+        history_status()
         return
     first_leg = None
     if (
@@ -364,6 +370,8 @@ def main() -> None:
                 "Se l'abbinamento non esiste in questo turno, il criterio resta non valutabile."
             )
     render_matches(acquisition, settings, first_leg)
+    sync_history()
+    history_status()
 
 
 if __name__ == "__main__":

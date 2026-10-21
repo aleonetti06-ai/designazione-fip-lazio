@@ -187,16 +187,27 @@ pesi o criticità societarie. Non è un flusso di assegnazione persone o conferm
 presenze. La revisione dei semafori resta futura; il campione selezionato e
 l'effetto del supporto presente vanno considerati nel confronto con Andrea.
 
-**Limite di conservazione:** la registrazione automatica avviene nella sessione
-Streamlit, non in un archivio durevole. Scaricare «Backup storico JSON» dalla
-sezione Storico e reimportarlo in una nuova sessione con conferma esplicita.
-L'importazione controlla campionato, versione, origine, duplicati, pesi e
-coerenza dei contributi; massimo 2 MiB e 440 segnalazioni. Un backup errato non
-sostituisce lo storico. Il backup delle criticità resta separato. Riavvii,
-perdita della sessione o chiusura del collegamento possono perdere dati non
-esportati: senza una destinazione esterna autorizzata non è garantita la
-conservazione automatica tra sessioni o operatori. Non salvare backup reali
-nella repository pubblica.
+**Conservazione permanente:** lo storico è collegabile a un foglio Google
+privato tramite i segreti dell'app. Una nuova sessione recupera automaticamente
+le segnalazioni condivise. La configurazione una tantum è descritta in
+[CONFIGURA_STORICO.md](CONFIGURA_STORICO.md).
+
+Il menu indica se l'archivio è collegato; ciascuna segnalazione distingue
+**Confermato** da **Da salvare**. Nessuna conferma permanente viene mostrata
+prima della rilettura dal servizio. In caso di errore i dati restano nella
+sessione e la sincronizzazione viene ritentata alle successive interazioni,
+senza duplicare una scrittura già riuscita. Senza configurazione il limite
+rimane esplicito: i dati non sono conservati oltre la sessione.
+
+La copia JSON è facoltativa quando il collegamento è attivo. L'importazione
+aggiunge soltanto segnalazioni mancanti e preserva quelle condivise, comprese
+motivazioni e riscontri. Un file errato non modifica lo storico. I limiti del
+backup sono 2 MiB e 440 segnalazioni; l'archivio ammette 10.000 eventi. Le
+scritture aggiungono eventi senza sostituire tutto il contenuto. La prima
+segnalazione rimane immutabile anche fra operatori; riscontri concorrenti sulla
+stessa versione richiedono riesame, senza sovrascritture silenziose.
+Il backup delle criticità resta separato. Non salvare backup reali nella
+repository pubblica.
 
 ## Criticità, note e conservazione
 
@@ -215,15 +226,15 @@ non modifica lo stato. Nomi non presenti nella classifica corrente vengono
 segnalati e non incidono sui punteggi; rimangono nel backup per non perderli.
 Non commettere in Git backup con note reali.
 
-Nella repository di partenza non risultava una configurazione di archivio
-persistente. Le impostazioni private di produzione non sono accessibili con
-l'accesso in sola lettura alla repository e non sono state ispezionate. Per un
-archivio **condiviso e durevole** serve una destinazione esterna scelta dal
-proprietario, per esempio un foglio Google privato con accesso server autorizzato
-o un database gestito, più credenziali private, controllo degli accessi e gestione
-delle modifiche concorrenti. Nessun servizio/account è stato creato da questa
-patch. File locali o SQLite sul filesystem di Community Cloud non risolvono
-questo requisito.
+Nella repository di partenza non risultava una configurazione persistente.
+Ora il codice include il collegamento dello **storico gare** a Google Sheets
+privato. Le credenziali private dell'app pubblicata non sono accessibili da
+questa sessione di sviluppo: la predisposizione del foglio non prova da sola
+che Streamlit possa scriverci. L'attivazione e la prova finale fra sessioni
+richiedono la configurazione descritta nella guida. Non è stato creato alcun
+account Google, servizio a pagamento o backend separato, né modificata la
+piattaforma Apps Script. File locali o SQLite su Community Cloud non vengono
+presentati come archivi durevoli.
 
 ## Verifiche
 
@@ -245,11 +256,13 @@ I test sono **offline**: fixture HTML/JSON minimali della fonte, senza arbitri o
 altri dati personali non necessari; rete simulata per errori e cache; AppTest per
 accesso, navigazione, modifiche dei widget, note, scansione esplicita dei due
 gironi, storico automatico immutabile, segnalazioni manuali a posteriori, backup
-e assenza di raccomandazioni con dati falliti/precedenti. Il confronto HTML/JSON protegge i casi reali del parser
+persistenza condivisa con rete simulata, recupero in una nuova sessione,
+retry idempotenti, conflitti fra operatori e assenza di raccomandazioni con dati
+falliti/precedenti. Il confronto HTML/JSON protegge i casi reali del parser
 originario. I controlli live sono separati e dipendono dalla disponibilità FIP.
 Gli esiti della ripresa del lavoro, distinti dai log precedenti, sono in
 [VERIFICA.md](VERIFICA.md).
 
-Il futuro deploy, la configurazione privata della password, l'eventuale archivio
+Il futuro deploy, la configurazione privata della password, l'attivazione dell'archivio
 condiviso e la validazione dei pesi con Andrea rimangono passaggi distinti.
 Questa patch non modifica `main`, l'app pubblica o la piattaforma Apps Script.

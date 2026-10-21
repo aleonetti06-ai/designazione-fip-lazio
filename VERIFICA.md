@@ -158,3 +158,61 @@ Lo storico automatico è ancora limitato alla sessione: il backup JSON consente
 conservazione e ripristino espliciti, ma la conservazione automatica durevole
 richiede una destinazione esterna autorizzata e configurata. Nessun servizio
 è stato creato. Questa limitazione è visibile nell’interfaccia e nel README.
+
+## Estensione: archivio permanente delle segnalazioni
+
+Richiesta successiva dell'utente: conservare automaticamente lo storico oltre
+la sessione Streamlit. Primo gate `bash scripts/setup.sh` superato, istruzioni
+Markdown lette; aggiunta `google-auth` per il collegamento privato Google Sheets.
+Setup ripetuto con la nuova dipendenza: exit 0, google-auth 2.62.0 nell'ambiente
+verificato. Nessun nuovo account, servizio a pagamento o modifica ad Apps Script.
+
+### Codice e comportamento
+
+- Aggiunti `history_store.py` (lettura/scrittura del foglio privato) e
+  `history_ui.py` (sincronizzazione con l'interfaccia). La nuova sessione legge
+  lo storico condiviso prima di mostrare o valutare le gare.
+- Ogni segnalazione viene aggiunta automaticamente; la conferma compare solo
+  dopo rilettura dal servizio. Errore o configurazione assente mantengono le
+  nuove voci nella sessione con stato **Da salvare**, senza falsi successi.
+- La sequenza di eventi conserva la prima fotografia per ID gara e origine,
+  deduplica i retry e separa i riscontri. Due modifiche del riscontro partite
+  dalla stessa versione non si sovrascrivono: una richiede riesame.
+- Importazione JSON limitata alle segnalazioni assenti; nessuna sostituzione
+  dell'archivio condiviso. Letture con cache di 15 secondi, scritture precedute
+  da rilettura, timeout espliciti e valori RAW per evitare formule nelle note.
+- Configurazione privata documentata in `CONFIGURA_STORICO.md` e nel file
+  `secrets.toml.example`, verificato anche con il parser TOML. Nessuna credenziale
+  reale inserita nel repository.
+
+### Verifiche offline
+
+**133 test passati** nella suite completa, inclusi gli AppTest Streamlit.
+Lint, formattazione, dipendenze e `git diff --check` superati. Nuovi casi:
+nuovo client e nuova sessione recuperano lo storico; la prima motivazione non
+cambia; timeout dopo una scrittura riuscita non duplica; riscontri concorrenti
+non si sovrascrivono; importazione preserva gli originali; HTTP 403/500, righe
+corrotte e intestazioni errate non diventano un archivio vuoto o una conferma.
+Questi controlli usano un servizio Sheets simulato, non credenziali Google reali.
+
+### Risorsa cloud predisposta e limiti di attivazione
+
+Creato tramite il connettore Google Drive un foglio nativo privato dedicato,
+con scheda `Eventi` e intestazioni rilette dopo l'importazione. Metadati verificati:
+`shared=false`, unica autorizzazione restituita di tipo proprietario. Nessuna
+condivisione pubblica e nessuna segnalazione reale o fittizia inserita.
+Il collegamento al file è consegnato nella chat, non incorporato nel codice pubblico.
+Anteprima locale controllata; formattazione e struttura native rilette via API.
+
+**Non è una prova di scrittura dall'app pubblicata.** Il connettore autorizzato
+in questa chat non fornisce una credenziale trasferibile al processo Streamlit.
+Occorre configurare l'account di servizio con accesso Editor al singolo foglio
+nei segreti privati dell'app e poi eseguire la verifica fra sessioni descritta
+nella guida. Non sono disponibili qui accesso alle impostazioni private o una
+credenziale runtime. L'ultima verifica GitHub conferma ancora `push=false`:
+nessuna PR, merge, pubblicazione o deploy eseguiti.
+
+Non sono stati cambiati pesi, soglie o fonte FIP in questa estensione. Per il
+dubbio di Andrea resta valida la correzione già preparata: dati JSON separati
+per gare e classifica, risultati rilevati distinti da quelli ufficiali e stato
+di omologazione non dedotto. Nessuna classifica provvisoria ricostruita.

@@ -99,7 +99,7 @@ def test_history_import_requires_explicit_replacement_and_does_not_touch_notes(m
     app.session_state["page_view"] = "📚 Storico gare attenzionate"
     app.run()
     assert not app.exception and not app.session_state["history"]
-    element(app.button, "Importa e sostituisci lo storico").click().run()
+    element(app.button, "Importa le segnalazioni mancanti").click().run()
     assert not app.exception and app.session_state["history"] == candidate
     assert app.session_state["notes"] == {}
     monkeypatch.setattr(
@@ -110,3 +110,78 @@ def test_history_import_requires_explicit_replacement_and_does_not_touch_notes(m
     app.run()
     assert not app.exception and app.session_state["history"] == candidate
     assert any("Backup storico non valido" in e.value for e in app.error)
+
+
+def test_automatic_history_survives_a_new_streamlit_session(monkeypatch):
+    from test_history_store import FakeSheets
+
+    from designazione import history_ui
+
+    server = FakeSheets()
+    first_store = server.store()
+    monkeypatch.setattr(history_ui, "get_history_store", lambda: first_store)
+    app, _ = weekly_app(monkeypatch)
+    app.run()
+    element(app.button, "Carica / aggiorna calendario A e B").click().run()
+    assert not app.exception
+    first = dict(app.session_state["history"])
+    assert len(first) == 1 and app.session_state["history_confirmed"] == set(first)
+    assert app.dataframe[0].value.loc[0, "Storico"] == "Salvata"
+
+    # Nuova sessione e nuova istanza del client: nessun dato deriva dalla precedente.
+    monkeypatch.setattr(history_ui, "get_history_store", lambda: server.store())
+    other = authenticated_app()
+    other.session_state["page_view"] = "📚 Storico gare attenzionate"
+    other.run()
+    assert not other.exception and other.session_state["history"] == first
+    assert other.dataframe[0].value.loc[0, "Salvataggio"] == "Confermato"
+    assert not any("solo nella sessione" in e.value for e in other.warning)
+
+
+def test_failed_automatic_write_stays_pending_and_retry_recovers_without_duplicates(monkeypatch):
+    from test_history_store import FakeSheets
+
+    from designazione import history_ui
+
+    server = FakeSheets()
+    store = server.store()
+    monkeypatch.setattr(history_ui, "get_history_store", lambda: store)
+    app, _ = weekly_app(monkeypatch)
+    app.run()
+    server.status = 403
+    element(app.button, "Carica / aggiorna calendario A e B").click().run()
+    assert not app.exception and len(app.session_state["history"]) == 1
+    assert not app.session_state["history_confirmed"]
+    assert any("Archivio non accessibile" in e.value for e in app.error)
+    assert app.dataframe[0].value.loc[0, "Storico"] == "Da salvare"
+    server.status = 200
+    app.run()
+    assert not app.exception
+    assert app.session_state["history_confirmed"] == set(app.session_state["history"])
+    assert len(server.rows) == 2
+
+
+def test_import_keeps_shared_original_and_feedback(monkeypatch):
+    from test_history_store import FakeSheets
+
+    from designazione import history_ui
+
+    server = FakeSheets()
+    store = server.store()
+    original = automatic_history()
+    entry = next(iter(original.values()))
+    store.add_new(original)
+    candidate = {entry.identity: replace(entry, reason="Non deve sovrascrivere la motivazione")}
+    data = export_history(candidate)
+    monkeypatch.setattr(history_ui, "get_history_store", lambda: store)
+    monkeypatch.setattr(
+        st,
+        "file_uploader",
+        lambda label, **kw: BytesIO(data) if label == "Backup storico JSON" else None,
+    )
+    app = authenticated_app()
+    app.session_state["page_view"] = "📚 Storico gare attenzionate"
+    app.run()
+    element(app.button, "Importa le segnalazioni mancanti").click().run()
+    assert not app.exception and app.session_state["history"] == original
+    assert server.store().load() == original and len(server.rows) == 2

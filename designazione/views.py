@@ -19,6 +19,7 @@ from designazione.history import (
     record_feedback,
     remember_signal,
 )
+from designazione.history_ui import save_feedback, sync_history
 from designazione.scoring import ScoringSettings, assess_match
 
 ROME = ZoneInfo("Europe/Rome")
@@ -48,7 +49,7 @@ def weekly_view(settings: ScoringSettings | None) -> None:
     )
     st.caption(
         "Le segnalazioni gialle e rosse nel periodo vengono registrate automaticamente nello storico, "
-        "per entrambi i gironi, con la motivazione originale. Esporta il backup per conservarle oltre la sessione."
+        "per entrambi i gironi, con la motivazione originale. Lo stato del salvataggio è indicato nel menu laterale."
     )
     index = get_calendar()
     refreshed = st.button("Carica / aggiorna calendario A e B")
@@ -113,6 +114,8 @@ def weekly_view(settings: ScoringSettings | None) -> None:
             continue
         evaluated.append((match, current, first, score))
     st.session_state["history"] = history
+    sync_history()
+    history = st.session_state["history"]
     if order == "Priorità":
         evaluated.sort(
             key=lambda row: (
@@ -150,8 +153,14 @@ def weekly_view(settings: ScoringSettings | None) -> None:
                 "Indicazione": score.advice(settings),
                 "Motivazione": score.blocked_reason
                 or " · ".join(f"{label}: +{value:g}" for label, value in score.contributions),
-                "Segnalazione salvata": f"{match.round.group_id}:{match.match_id}:Sistema"
-                in history,
+                "Storico": (
+                    "Salvata"
+                    if f"{match.round.group_id}:{match.match_id}:Sistema"
+                    in st.session_state["history_confirmed"]
+                    else "Da salvare"
+                    if f"{match.round.group_id}:{match.match_id}:Sistema" in history
+                    else "Non segnalata"
+                ),
             }
         )
     if rows:
@@ -206,9 +215,16 @@ def weekly_view(settings: ScoringSettings | None) -> None:
 
 def history_view() -> None:
     st.header("📚 Storico gare attenzionate")
-    st.warning(
-        "Lo storico è nella sessione corrente. Esporta il backup per conservarlo; non è ancora un archivio condiviso durevole."
-    )
+    if st.button("Aggiorna storico condiviso"):
+        sync_history(force=True)
+    if st.session_state.get("history_store_status") == "connected":
+        st.caption(
+            "Le segnalazioni confermate sono conservate nell’archivio permanente e disponibili nelle nuove sessioni. La copia JSON è facoltativa."
+        )
+    else:
+        st.warning(
+            "Salvataggio permanente non attivo o non raggiungibile. Le nuove segnalazioni restano nella sessione corrente finché la sincronizzazione non riesce."
+        )
     st.caption(
         "Per le segnalazioni del sistema vengono conservati il primo punteggio giallo/rosso, "
         "la motivazione, i pesi, le posizioni e le criticità di quel momento. Il riscontro non li modifica. "
@@ -231,15 +247,20 @@ def history_view() -> None:
                 st.error(str(exc))
             else:
                 st.caption(
-                    f"Backup valido: {len(candidate)} segnalazioni. Sostituisce lo storico della sessione; le criticità societarie restano invariate."
+                    f"Backup valido: {len(candidate)} segnalazioni. Aggiunge soltanto quelle assenti, conservando motivazioni e riscontri già registrati."
                 )
-                if st.button("Importa e sostituisci lo storico"):
-                    st.session_state["history"] = candidate
+                if st.button("Importa le segnalazioni mancanti"):
+                    st.session_state["history"] = {**candidate, **history}
                     for key in list(st.session_state):
                         if key.startswith("feedback_"):
                             del st.session_state[key]
                     st.rerun()
     if not history:
+        if st.session_state.get("history_store_status") == "error":
+            st.info(
+                "Lo storico condiviso non è consultabile al momento. Nessun dato remoto è stato cancellato."
+            )
+            return
         st.info(
             "Nessuna segnalazione registrata. Le priorità gialle e rosse vengono salvate quando consulti le gare; puoi anche aggiungere segnalazioni manuali."
         )
@@ -255,6 +276,9 @@ def history_view() -> None:
                     "Gara": e.match.match_id,
                     "Girone": GROUPS[e.match.round.group_id],
                     "Origine": e.origin,
+                    "Salvataggio": "Confermato"
+                    if e.identity in st.session_state["history_confirmed"]
+                    else "Da salvare",
                     "Prima segnalazione": e.selected_at.astimezone(ROME).strftime("%d/%m/%Y %H:%M"),
                     "Data gara salvata": str(e.match.day or "Da verificare"),
                     "Casa": e.match.home,
@@ -317,12 +341,12 @@ def history_view() -> None:
             key=f"feedback_note_{identity}",
         )
         if st.form_submit_button("Salva riscontro", disabled=future):
-            candidate = {**history, identity: record_feedback(entry, support, assessment, note)}
+            updated = record_feedback(entry, support, assessment, note)
             try:
-                export_history(candidate)
+                export_history({identity: updated})
+                save_feedback(updated, entry)
             except ValueError as exc:
                 st.error(str(exc))
             else:
-                st.session_state["history"] = candidate
                 st.session_state["history_saved"] = True
                 st.rerun()
