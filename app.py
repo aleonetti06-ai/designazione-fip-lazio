@@ -60,10 +60,6 @@ def settings_panel() -> ScoringSettings | None:
         red = st.slider("Soglia formatore al tavolo", 6.0, 10.0, 8.0, step=0.5)
         yellow = st.slider("Soglia tutor in campo", 4.0, 7.9, 6.0, step=0.1)
         enabled = st.checkbox("Considera il ritorno dopo andata equilibrata", value=False)
-        st.caption(
-            "Criterio aggiuntivo provvisorio: disattivato, peso iniziale 0. "
-            "Scarto massimo proposto 5; parametri da validare con Andrea."
-        )
         margin = st.number_input(
             "Scarto massimo andata (incluso)",
             min_value=0,
@@ -113,25 +109,26 @@ def transfer_panel() -> None:
                     st.rerun()
 
 
-def acquisition_status(acquisition: Acquisition, key: RoundKey, label: str = "Dati FIP") -> None:
-    st.link_button(f"Apri fonte · {label}", source_url(key))
+def acquisition_status(acquisition: Acquisition, key: RoundKey, label: str = "Calendario") -> None:
+    page = acquisition.page
+    source = "FIP"
+    if page and not page.source_label.startswith("Backend FIP"):
+        source = "FIP (lettura di ripiego)"
+    if acquisition.error or page is None:
+        timestamp_label, timestamp = "Ultimo tentativo", acquisition.attempted_at
+    else:
+        timestamp_label = "Ultima lettura incompleta" if page.issues else "Ultimo aggiornamento"
+        timestamp = page.fetched_at
     st.caption(
-        f"Ultimo tentativo: {acquisition.attempted_at.astimezone(ROME):%d/%m/%Y %H:%M:%S %Z}"
+        f"Fonte: {source} · {timestamp_label}: {timestamp.astimezone(ROME):%d/%m/%Y %H:%M:%S %Z}"
     )
     if acquisition.error:
         st.error(acquisition.error)
-    if acquisition.page:
-        page = acquisition.page
-        st.caption(f"Fonte acquisizione: {page.source_label}")
-        if page.ranking_url:
-            st.link_button("Dati classifica FIP (JSON)", page.ranking_url)
-        freshness_label = (
-            "Ultima lettura incompleta" if page.issues else "Ultima acquisizione valida"
-        )
-        st.caption(
-            f"{freshness_label} · {label}: {page.fetched_at.astimezone(ROME):%d/%m/%Y %H:%M:%S %Z}"
-        )
+    if page:
         if acquisition.error:
+            st.caption(
+                f"Dati mostrati del: {page.fetched_at.astimezone(ROME):%d/%m/%Y %H:%M:%S %Z}"
+            )
             st.warning(
                 "Mostro dati di una precedente acquisizione. "
                 "Le raccomandazioni automatiche sono sospese."
@@ -140,6 +137,16 @@ def acquisition_status(acquisition: Acquisition, key: RoundKey, label: str = "Da
             st.warning(issue)
     else:
         st.warning("Nessun dato valido disponibile. Classifica e punteggi non vengono inventati.")
+    with st.expander(f"Fonti e dettagli · {label}"):
+        st.caption(
+            f"Ultimo tentativo di lettura: {acquisition.attempted_at.astimezone(ROME):%d/%m/%Y %H:%M:%S %Z}"
+        )
+        if page:
+            st.caption(f"Modalità di lettura: {page.source_label}")
+        calendar_link, ranking_link = st.columns(2)
+        calendar_link.link_button(f"{label} sul sito FIP", source_url(key))
+        if page and page.ranking_url:
+            ranking_link.link_button("Classifica: dati originali FIP", page.ranking_url)
 
 
 def render_matches(
@@ -274,9 +281,6 @@ def main() -> None:
     with weights_container:
         team_weights_panel({group: acquisition}, group)
     st.title("🏀 Designazione CIA · U15 Gold Lazio")
-    st.caption(
-        "Supporto ai designatori. La scelta della coppia arbitrale resta una valutazione umana."
-    )
     acquisition_status(acquisition, key)
     page = acquisition.page
     if page is None:
@@ -333,7 +337,8 @@ def main() -> None:
             first_key = RoundKey(group, 1, number)
             with st.spinner("Verifica dell'andata corrispondente…"):
                 first_leg = get_source().get(first_key, force=force)
-            with st.expander("Fonte per il criterio ritorno"):
+            with st.container(border=True):
+                st.caption("Fonte per il criterio ritorno")
                 acquisition_status(first_leg, first_key, "Andata")
                 st.caption(
                     "Confronto per nomi esatti e casa/ospite invertite. "

@@ -4,6 +4,9 @@ Registro sintetico delle modifiche, dalla più recente.
 
 ## 21 ottobre 2026
 
+- Semplificati i testi della vista settimanale e dei pesi; riuniti fonte e
+  aggiornamento nella dashboard, con dettagli tecnici richiudibili e avvisi
+  sui dati precedenti conservati. Aggiunta la licenza MIT per il codice.
 - Aggiunta la pagina **Info**; sintetizzato il README e introdotto questo registro.
 - Rinominato il pulsante in **Aggiorna calendario A e B** ([PR #3](https://github.com/aleonetti06-ai/designazione-fip-lazio/pull/3)).
 - Riunite dashboard e verifica FIP in due schede della stessa pagina; aggiunto

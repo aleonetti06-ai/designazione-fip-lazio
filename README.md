@@ -40,6 +40,10 @@ di 5 minuti. Non esiste un aggiornamento schedulato a pagina chiusa.
 - **Pesi squadre e note:** restano nella sessione; conservarli e ripristinarli
   tramite «Esporta / importa note». Il collegamento dello storico non li salva.
 
+L’app non scrive su GitHub: le valutazioni inserite restano nella sessione,
+nei backup scaricati o nell’archivio Google privato configurato. La repository
+contiene codice e campioni pubblici FIP per i test, non le valutazioni operative.
+
 ## Avvio e configurazione
 
 Richiede Python 3.11 o successivo e accesso HTTPS a PyPI e FIP. Dalla radice:
@@ -72,3 +76,8 @@ l’interfaccia; `designazione/` separa dominio, acquisizione, calcolo e archivi
 CIA Lazio resta separata.
 
 Modifiche: [CHANGELOG.md](CHANGELOG.md). Verifiche storiche: [VERIFICA.md](VERIFICA.md).
+
+## Licenza
+
+Il codice originale del progetto è distribuito con [licenza MIT](LICENSE).
+La licenza non attribuisce diritti su dati o servizi FIP.
