@@ -100,10 +100,6 @@ def weekly_view(settings: ScoringSettings | None, weights_container) -> None:
     order = st.selectbox("Ordina gare per", ["Priorità", "Data e ora"])
     only_signals = st.checkbox("Solo gialle, rosse e gare da verificare")
     st.caption(
-        "Il calendario viene caricato solo con il pulsante. Cambiare filtri o pesi non "
-        "avvia richieste FIP. Sono inclusi recuperi e spostamenti di tutti i turni."
-    )
-    st.caption(
         "Le segnalazioni gialle e rosse nel periodo vengono registrate automaticamente nello storico, "
         "per entrambi i gironi, con la motivazione originale. Lo stato del salvataggio è indicato nel menu laterale."
     )

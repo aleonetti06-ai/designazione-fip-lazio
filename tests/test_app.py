@@ -69,6 +69,7 @@ def test_login_dashboard_verification_and_widgets_do_not_rescan_source(
     element(app.text_input, "Password").input(password)
     element(app.button, "Accedi").click().run()
     assert not app.exception and get.call_count == 2
+    assert any("Fonte: FIP · Ultimo aggiornamento:" in item.value for item in app.caption)
     assert app.dataframe[0].value.loc[3, "Squadra"] == "SUPERNOVA FIUMICINO"
     assert app.dataframe[0].value.loc[3, "Punti"] == 0
     element(app.slider, "Scontro al vertice (1ª–4ª)").set_value(6.0).run()
@@ -163,6 +164,8 @@ def test_stale_ranking_visible_but_recommendations_suspended(monkeypatch, page):
     app = authenticated_app().run()
     assert not app.exception and len(app.dataframe) == 2
     assert any("precedente acquisizione" in e.value for e in app.warning)
+    assert any("Dati mostrati del:" in e.value for e in app.caption)
+    assert any("Ultimo tentativo:" in e.value for e in app.caption)
     assert any("Da verificare" in e.value for e in app.warning)
     assert not app.success
     assert app.dataframe[0].value.loc[0, "Punti"] == 2

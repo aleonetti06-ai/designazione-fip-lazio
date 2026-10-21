@@ -3,4 +3,7 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .streamlit/secrets.toml
+# Backup privati scaricati dall’app.
+criticita-u15-lazio*.json
+storico-gare-u15-lazio*.json
 *.pyc
