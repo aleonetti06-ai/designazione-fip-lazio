@@ -48,7 +48,7 @@ Script rimane separata e non viene modificata.
 
 L'acquisizione è **a richiesta**: apertura della pagina e interazioni eseguono lo
 script Streamlit, ma la **Vista settimanale**, pagina iniziale, legge FIP solo
-premendo «Carica / aggiorna calendario A e B». Il cambio di date, filtri o pesi
+premendo «Aggiorna calendario A e B». Il cambio di date, filtri o pesi
 riusa l'indice acquisito, senza richieste. Non esiste un timer o processo
 periodico: a pagina chiusa non si aggiornano dati o storico.
 
