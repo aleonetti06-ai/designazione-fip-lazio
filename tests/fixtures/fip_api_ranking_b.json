@@ -1,0 +1,68 @@
+[
+  {
+    "posizione": 1,
+    "nome_squadra": "CITTA FUTURA ROMA 1981",
+    "punti_classifica": 2,
+    "squadra_codice": "056278"
+  },
+  {
+    "posizione": 2,
+    "nome_squadra": "STELLE MARINE BASKET",
+    "punti_classifica": 2,
+    "squadra_codice": "000304"
+  },
+  {
+    "posizione": 3,
+    "nome_squadra": "HSC ROMA BASKET",
+    "punti_classifica": 2,
+    "squadra_codice": "055452"
+  },
+  {
+    "posizione": 4,
+    "nome_squadra": "SMIT ROMA CENTRO",
+    "punti_classifica": 0,
+    "squadra_codice": "000693"
+  },
+  {
+    "posizione": 5,
+    "nome_squadra": "BK FERENTINO",
+    "punti_classifica": 0,
+    "squadra_codice": "056652"
+  },
+  {
+    "posizione": 6,
+    "nome_squadra": "LATINA BASKET",
+    "punti_classifica": 0,
+    "squadra_codice": "052167"
+  },
+  {
+    "posizione": 7,
+    "nome_squadra": "AVENIA ACADEMY COLLEFERRO",
+    "punti_classifica": 0,
+    "squadra_codice": "056643"
+  },
+  {
+    "posizione": 8,
+    "nome_squadra": "CENTRI LAZIALI BASKET",
+    "punti_classifica": 0,
+    "squadra_codice": "023297"
+  },
+  {
+    "posizione": 9,
+    "nome_squadra": "VIGNA PIA",
+    "punti_classifica": 0,
+    "squadra_codice": "001083"
+  },
+  {
+    "posizione": 10,
+    "nome_squadra": "BASKET BEE",
+    "punti_classifica": 0,
+    "squadra_codice": "054741"
+  },
+  {
+    "posizione": 11,
+    "nome_squadra": "BASKET CASSINO",
+    "punti_classifica": 0,
+    "squadra_codice": "046323"
+  }
+]
