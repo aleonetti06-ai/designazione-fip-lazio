@@ -4,6 +4,9 @@ Registro sintetico delle modifiche, dalla più recente.
 
 ## 21 ottobre 2026
 
+- Corretta la copertura del calendario dopo un ricaricamento dei moduli:
+  i turni già acquisiti restano riconosciuti. Mostrato il totale verificato
+  su 44 turni, mantenendo gli avvisi per errori e dati scaduti o incompleti.
 - Chiarito nelle **Info** l’obiettivo della piattaforma: individuare le gare da
   attenzionare e orientare il supporto formativo ai giovani arbitri.
 - Semplificati i testi della vista settimanale e dei pesi; riuniti fonte e

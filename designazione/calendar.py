@@ -24,6 +24,19 @@ class CalendarSnapshot:
 
     def acquisition(self, key: RoundKey, now: datetime) -> Acquisition | None:
         item = self.entries.get(key)
+        if item is None:
+            # Streamlit può ricreare RoundKey mentre cache e altri moduli
+            # conservano la classe precedente. L'identità del turno dipende
+            # dai tre valori FIP, non dalla generazione della classe Python.
+            identity = (key.group_id, key.leg, key.number)
+            item = next(
+                (
+                    value
+                    for stored, value in self.entries.items()
+                    if (stored.group_id, stored.leg, stored.number) == identity
+                ),
+                None,
+            )
         # Un cambio filtro non scarica dati. Dopo 5 minuti i vecchi dati restano
         # consultabili, ma serve un aggiornamento esplicito per i suggerimenti.
         if item and item.page and (now - item.page.fetched_at).total_seconds() > 300:
@@ -57,7 +70,6 @@ class CalendarIndex:
             ttl = 300 if complete else 60
             if previous and self.clock() - self._loaded_at < (60 if force else ttl):
                 return previous
-            old = previous.entries if previous else {}
 
             def load_group(group):
                 entries = {}
@@ -70,7 +82,7 @@ class CalendarIndex:
                     failure = str(exc)
                 for key in (k for k in ALL_ROUNDS if k.group_id == group):
                     attempt = datetime.now(timezone.utc)
-                    prior = old.get(key)
+                    prior = previous.acquisition(key, attempt) if previous else None
                     try:
                         if failure:
                             raise FipError(failure)

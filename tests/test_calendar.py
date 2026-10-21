@@ -9,6 +9,42 @@ from designazione.domain import Acquisition, RoundKey
 from designazione.fip import FipError
 
 
+def test_round_lookup_survives_module_reload_without_mixing_contexts(reloaded_round_key):
+    page = sample_page()
+    original = Acquisition(page, NOW)
+    snapshot = CalendarSnapshot({page.round: original}, NOW)
+    key = reloaded_round_key(page.round.group_id, page.round.leg, page.round.number)
+    assert key != page.round  # Campi uguali, classi Python di generazioni diverse.
+    assert snapshot.acquisition(key, NOW) is original
+    assert not snapshot.acquisition(key, NOW + timedelta(minutes=6)).usable_for_scores
+    for different in (
+        reloaded_round_key("85583", 1, 1),
+        reloaded_round_key("85582", 0, 1),
+        reloaded_round_key("85582", 1, 2),
+    ):
+        assert snapshot.acquisition(different, NOW) is None
+
+
+def test_failed_refresh_after_reload_preserves_last_valid_pages(reloaded_round_key, monkeypatch):
+    from designazione import calendar
+
+    clock = [0]
+    fetch = Mock(side_effect=lambda key, **kw: sample_page(key))
+    index = CalendarIndex(fetch, lambda group: [], clock=lambda: clock[0])
+    original = index.load()
+    monkeypatch.setattr(
+        calendar,
+        "ALL_ROUNDS",
+        tuple(reloaded_round_key(k.group_id, k.leg, k.number) for k in ALL_ROUNDS),
+    )
+    fetch.side_effect = FipError("Timeout fonte")
+    clock[0] = 301
+    failed = index.load()
+    for key, item in failed.entries.items():
+        assert item.page is original.acquisition(key, NOW).page
+        assert item.error and not item.usable_for_scores
+
+
 def test_explicit_calendar_load_reuses_two_rankings_and_never_fetches_on_filters():
     clock = [0]
     ranking = Mock(return_value=["public ranking"])
