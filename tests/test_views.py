@@ -9,7 +9,7 @@ from test_app import authenticated_app, element
 from test_history import NOW, automatic_history, sample_page
 
 from designazione import views
-from designazione.calendar import CalendarSnapshot
+from designazione.calendar import ALL_ROUNDS, CalendarSnapshot
 from designazione.domain import Acquisition, Criticism, RoundKey
 from designazione.fip import SourceCache
 from designazione.history import export_history, import_history
@@ -31,6 +31,45 @@ def weekly_app(monkeypatch, page=None):
     app = authenticated_app()
     app.session_state["page_view"] = "📅 Vista settimanale"
     return app, index
+
+
+def test_coverage_after_reload_matches_games_and_keeps_real_errors(monkeypatch, reloaded_round_key):
+    get = Mock(side_effect=AssertionError("Nessun accesso reale alla rete"))
+    monkeypatch.setattr(requests, "get", get)
+    app, index = weekly_app(monkeypatch)
+    pages = [sample_page(reloaded_round_key(k.group_id, k.leg, k.number)) for k in ALL_ROUNDS]
+    # Ogni gara compare in un solo turno, come nel calendario FIP.
+    pages = [
+        replace(p, matches=tuple(replace(m, match_id=f"{i:02}{m.match_id}") for m in p.matches))
+        for i, p in enumerate(pages)
+    ]
+    snapshot = CalendarSnapshot({p.round: Acquisition(p, NOW) for p in pages}, NOW)
+    index.load.side_effect = lambda **kw: setattr(index.peek, "return_value", snapshot)
+    app.run()
+    element(app.button, "Aggiorna calendario A e B").click().run()
+    assert not app.exception and len(app.dataframe[0].value) == 88
+    assert not any("turni non aggiornati" in w.value for w in app.warning)
+    assert "Dettagli copertura calendario" not in [e.label for e in app.expander]
+    assert any("44/44 turni aggiornati e verificabili" in c.value for c in app.caption)
+
+    missing, failed, fallback = (p.round for p in pages[:3])
+    del snapshot.entries[missing]
+    snapshot.entries[failed] = replace(snapshot.entries[failed], error="Timeout fonte")
+    item = snapshot.entries[fallback]
+    snapshot.entries[fallback] = replace(item, page=replace(item.page, issues=("Ripiego HTML",)))
+    element(app.checkbox, "Solo gialle, rosse e gare da verificare").check().run()
+    assert not app.exception and index.load.call_count == 1 and not get.called
+    assert any("3 turni non aggiornati" in w.value for w in app.warning)
+    assert any("41/44 turni aggiornati e verificabili" in c.value for c in app.caption)
+    details = element(app.expander, "Dettagli copertura calendario")
+    assert len(details.markdown) == 3
+    assert any("Dati assenti" in m.value for m in details.markdown)
+    assert any("Timeout fonte" in m.value for m in details.markdown)
+    assert any("Ripiego HTML" in m.value for m in details.markdown)
+    table = app.dataframe[0].value
+    assert set(
+        table[table.Gara.isin([m.match_id for p in pages[1:3] for m in p.matches])].Priorità
+    ) == {"Da verificare"}
 
 
 def test_weekly_load_automatically_saves_reason_and_filters_do_not_redownload(monkeypatch):

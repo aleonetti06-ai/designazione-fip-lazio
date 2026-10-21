@@ -32,6 +32,7 @@ def now_rome():
 
 @st.cache_resource
 def get_calendar() -> CalendarIndex:
+    # Ricrea anche la risorsa preesistente al fix delle chiavi dopo un reload.
     return CalendarIndex()
 
 
@@ -149,6 +150,10 @@ def weekly_view(settings: ScoringSettings | None, weights_container) -> None:
                 else (" · ".join(item.page.issues) if item and item.page else "Dati assenti")
             )
             problems.append(f"{GROUPS[key.group_id]} · {key.label}: {detail}")
+    st.caption(
+        f"Copertura calendario: {len(ALL_ROUNDS) - len(problems)}/{len(ALL_ROUNDS)} "
+        "turni aggiornati e verificabili."
+    )
     if problems:
         st.warning(
             f"{len(problems)} turni non aggiornati o non verificabili. L'elenco può essere incompleto; nessuna assenza di gare viene interpretata come conferma."
