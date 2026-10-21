@@ -10,7 +10,8 @@ from test_history import NOW, automatic_history, sample_page
 
 from designazione import views
 from designazione.calendar import CalendarSnapshot
-from designazione.domain import Acquisition
+from designazione.domain import Acquisition, Criticism, RoundKey
+from designazione.fip import SourceCache
 from designazione.history import export_history, import_history
 
 
@@ -38,6 +39,11 @@ def test_weekly_load_automatically_saves_reason_and_filters_do_not_redownload(mo
     app, index = weekly_app(monkeypatch)
     app.run()
     assert not app.exception and not index.load.called and not get.called
+    assert [panel.label for panel in app.sidebar.expander][:3] == [
+        "⚙️ Pesi e soglie",
+        "⚖️ Pesi squadre",
+        "📁 Esporta / importa note",
+    ]
     assert not app.session_state["history"]
     element(app.button, "Carica / aggiorna calendario A e B").click().run()
     assert not app.exception and index.load.call_count == 1
@@ -57,6 +63,42 @@ def test_weekly_load_automatically_saves_reason_and_filters_do_not_redownload(mo
     assert table.loc[0, "Punteggio salvato"] == 9.5
     assert "Sfida al vertice" in table.loc[0, "Perché segnalata"]
     assert any("sessione corrente" in w.value for w in app.warning)
+
+
+def test_weekly_team_weights_recalculate_without_reload_and_follow_navigation(monkeypatch):
+    get = Mock(side_effect=AssertionError("Nessun accesso reale alla rete"))
+    monkeypatch.setattr(requests, "get", get)
+    app, index = weekly_app(monkeypatch)
+    app.run()
+    element(app.button, "Carica / aggiorna calendario A e B").click().run()
+    page_b = sample_page(RoundKey("85583", 1, 1))
+    index.peek.return_value.entries[page_b.round] = Acquisition(page_b, NOW)
+    original = dict(app.session_state["history"])
+    element(app.selectbox, "Squadra").set_value("Squadra 11").run()
+    element(app.selectbox, "Peso della squadra").set_value(4)
+    element(app.button, "Applica peso e nota").click().run()
+    element(app.selectbox, "Squadra").set_value("Squadra 1").run()
+    element(app.selectbox, "Peso della squadra").set_value(2)
+    element(app.text_area, "Nota").input("Valutazione societaria")
+    element(app.button, "Applica peso e nota").click().run()
+    table = app.dataframe[0].value
+    row = table[(table.Girone == "Girone A") & (table.Gara == "000032")].iloc[0]
+    assert row.Punteggio == 7 and row.Priorità == "🟡 Giallo"
+    assert app.session_state["history"]["85582:000032:Sistema"].score.total == 7
+    assert all(app.session_state["history"][key] == entry for key, entry in original.items())
+    element(app.selectbox, "Girone per i pesi").set_value("85583").run()
+    element(app.selectbox, "Squadra").set_value("Squadra 1").run()
+    assert element(app.selectbox, "Peso della squadra").value == 0
+    assert app.session_state["notes"]["85582"]["Squadra 1"] == Criticism(
+        2, "Valutazione societaria"
+    )
+    assert not app.exception and index.load.call_count == 1 and not get.called
+    monkeypatch.setattr(SourceCache, "get", lambda self, key, **kw: index.peek().entries[key])
+    element(app.radio, "Pagina").set_value("🏀 Dashboard designazione").run()
+    element(app.selectbox, "Squadra").set_value("Squadra 1").run()
+    assert not app.exception and element(app.selectbox, "Peso della squadra").value == 2
+    assert any("SCORE 7.0" in item.value for item in app.warning)
+    assert index.load.call_count == 1 and not get.called
 
 
 def test_past_missed_game_can_be_reported_and_feedback_keeps_original_snapshot(monkeypatch):
