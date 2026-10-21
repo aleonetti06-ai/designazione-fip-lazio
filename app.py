@@ -6,12 +6,13 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import streamlit as st
 
-from designazione.domain import COMPETITION, GROUPS, Acquisition, Criticism, RoundKey
+from designazione.domain import COMPETITION, GROUPS, Acquisition, RoundKey
 from designazione.fip import SourceCache, source_url
 from designazione.history import remember_signal
 from designazione.history_ui import history_status, sync_history
 from designazione.scoring import ScoringSettings, assess_match
 from designazione.storage import export_notes, import_notes
+from designazione.team_ui import team_weights_panel
 from designazione.views import history_view, now_rome, weekly_view
 
 ROME = ZoneInfo("Europe/Rome")
@@ -110,49 +111,6 @@ def transfer_panel() -> None:
                         if key.startswith(("critic_points_", "critic_note_")):
                             del st.session_state[key]
                     st.rerun()
-
-
-def notes_panel(acquisition: Acquisition, group_id: str) -> None:
-    page = acquisition.page
-    if page is None:
-        st.sidebar.info("Modifica criticità disponibile dopo un'acquisizione valida delle squadre.")
-        return
-    with st.sidebar.expander("⚠️ Criticità società", expanded=True):
-        team = st.selectbox("Squadra", [r.team for r in page.ranking], key=f"note_team_{group_id}")
-        notes = st.session_state["notes"].setdefault(group_id, {})
-        item = notes.get(team, Criticism())
-        suffix = f"{group_id}_{team}"
-        with st.form(f"criticism_{suffix}"):
-            points = st.selectbox(
-                "Livello criticità",
-                [0, 2, 4],
-                index=[0, 2, 4].index(item.points),
-                format_func=lambda p: {0: "Normale (+0)", 2: "Media (+2)", 4: "Alta (+4)"}[p],
-                key=f"critic_points_{suffix}",
-            )
-            note = st.text_area(
-                "Nota", value=item.note, max_chars=2000, key=f"critic_note_{suffix}"
-            )
-            if st.form_submit_button("Applica in questa sessione"):
-                candidate = {
-                    group: dict(items) for group, items in st.session_state["notes"].items()
-                }
-                candidate[group_id][team] = Criticism(float(points), note)
-                try:
-                    export_notes(candidate)
-                except ValueError as exc:
-                    st.error(str(exc))
-                else:
-                    st.session_state["notes"] = candidate
-                    st.session_state["notes_saved"] = True
-                    # Rigenera subito anche il download, creato prima del modulo di modifica.
-                    st.rerun()
-        unknown = set(notes) - {r.team for r in page.ranking}
-        if unknown:
-            st.warning(
-                f"{len(unknown)} note importate hanno nomi non presenti nella classifica "
-                "corrente: restano nel backup ma non incidono sui punteggi."
-            )
 
 
 def acquisition_status(acquisition: Acquisition, key: RoundKey, label: str = "Dati FIP") -> None:
@@ -266,17 +224,19 @@ def main() -> None:
     if "history" not in st.session_state:
         st.session_state["history"] = {}
     st.sidebar.title("📌 Designazione CIA")
+    if st.session_state.get("page_view") == "🔍 Verifica dati FIP":
+        st.session_state["page_view"] = "🏀 Dashboard designazione"
     view = st.sidebar.radio(
         "Pagina",
         [
             "📅 Vista settimanale",
             "🏀 Dashboard designazione",
-            "🔍 Verifica dati FIP",
             "📚 Storico gare attenzionate",
         ],
         key="page_view",
     )
     settings = settings_panel()
+    weights_container = st.sidebar.container()
     transfer_panel()
     if st.sidebar.button("Esci"):
         st.session_state["authenticated"] = False
@@ -285,10 +245,12 @@ def main() -> None:
     if st.session_state.pop("history_saved", False):
         st.info("Storico aggiornato. Verifica lo stato del salvataggio nel menu laterale.")
     if view == "📅 Vista settimanale":
-        weekly_view(settings)
+        weekly_view(settings, weights_container)
         history_status()
         return
     if view == "📚 Storico gare attenzionate":
+        with weights_container:
+            team_weights_panel({})
         history_view()
         history_status()
         return
@@ -303,9 +265,8 @@ def main() -> None:
     )
     with st.spinner("Acquisizione FIP della giornata selezionata…"):
         acquisition = get_source().get(key, force=force)
-    notes_panel(acquisition, group)
-    if st.session_state.pop("notes_saved", False):
-        st.sidebar.success("Criticità applicata alla sessione. Scarica il backup per conservarla.")
+    with weights_container:
+        team_weights_panel({group: acquisition}, group)
     st.title("🏀 Designazione CIA · U15 Gold Lazio")
     st.caption(
         "Supporto ai designatori. La scelta della coppia arbitrale resta una valutazione umana."
@@ -315,15 +276,19 @@ def main() -> None:
     if page is None:
         history_status()
         return
-    st.subheader("Classifica pubblicata da FIP")
-    st.dataframe(
-        pd.DataFrame(
-            [{"Posizione": r.position, "Squadra": r.team, "Punti": r.points} for r in page.ranking]
-        ),
-        hide_index=True,
-        use_container_width=True,
-    )
-    if "Verifica" in view:
+    recommendations, verification = st.tabs(["Gare e priorità", "Dati FIP: classifica e risultati"])
+    with verification:
+        st.subheader("Classifica pubblicata da FIP")
+        st.dataframe(
+            pd.DataFrame(
+                [
+                    {"Posizione": r.position, "Squadra": r.team, "Punti": r.points}
+                    for r in page.ranking
+                ]
+            ),
+            hide_index=True,
+            use_container_width=True,
+        )
         st.subheader("Gare della giornata selezionata")
         st.dataframe(
             pd.DataFrame(
@@ -348,28 +313,27 @@ def main() -> None:
             hide_index=True,
             use_container_width=True,
         )
-        history_status()
-        return
-    first_leg = None
-    if (
-        settings
-        and settings.return_enabled
-        and settings.return_weight > 0
-        and leg == 0
-        and acquisition.usable_for_scores
-        and any(not m.has_result for m in page.matches)
-    ):
-        # Un solo turno aggiuntivo, mai una scansione automatica di tutto il campionato.
-        first_key = RoundKey(group, 1, number)
-        with st.spinner("Verifica dell'andata corrispondente…"):
-            first_leg = get_source().get(first_key, force=force)
-        with st.expander("Fonte per il criterio ritorno"):
-            acquisition_status(first_leg, first_key, "Andata")
-            st.caption(
-                "Confronto per nomi esatti e casa/ospite invertite. "
-                "Se l'abbinamento non esiste in questo turno, il criterio resta non valutabile."
-            )
-    render_matches(acquisition, settings, first_leg)
+    with recommendations:
+        first_leg = None
+        if (
+            settings
+            and settings.return_enabled
+            and settings.return_weight > 0
+            and leg == 0
+            and acquisition.usable_for_scores
+            and any(not m.has_result for m in page.matches)
+        ):
+            # Un solo turno aggiuntivo, mai una scansione automatica di tutto il campionato.
+            first_key = RoundKey(group, 1, number)
+            with st.spinner("Verifica dell'andata corrispondente…"):
+                first_leg = get_source().get(first_key, force=force)
+            with st.expander("Fonte per il criterio ritorno"):
+                acquisition_status(first_leg, first_key, "Andata")
+                st.caption(
+                    "Confronto per nomi esatti e casa/ospite invertite. "
+                    "Se l'abbinamento non esiste in questo turno, il criterio resta non valutabile."
+                )
+        render_matches(acquisition, settings, first_leg)
     sync_history()
     history_status()
 

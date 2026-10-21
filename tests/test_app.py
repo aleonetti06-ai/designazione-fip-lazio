@@ -73,8 +73,12 @@ def test_login_dashboard_verification_and_widgets_do_not_rescan_source(
     assert app.dataframe[0].value.loc[3, "Punti"] == 0
     element(app.slider, "Scontro al vertice (1ª–4ª)").set_value(6.0).run()
     assert not app.exception and get.call_count == 2
-    element(app.radio, "Pagina").set_value("🔍 Verifica dati FIP").run()
     assert not app.exception and len(app.dataframe) == 2 and get.call_count == 2
+    assert "🔍 Verifica dati FIP" not in element(app.radio, "Pagina").options
+    assert [tab.label for tab in app.tabs] == [
+        "Gare e priorità",
+        "Dati FIP: classifica e risultati",
+    ]
     matches = app.dataframe[1].value.set_index("ID gara")
     assert matches.loc["002983", "Casa"] == "BASKET ROMA"
     assert matches.loc["002983", "Risultato"] == "44 - 66"
@@ -152,7 +156,7 @@ def test_stale_ranking_visible_but_recommendations_suspended(monkeypatch, page):
     stale = Acquisition(page, page.fetched_at, "Errore fonte di test")
     monkeypatch.setattr(SourceCache, "get", lambda *a, **kw: stale)
     app = authenticated_app().run()
-    assert not app.exception and len(app.dataframe) == 1
+    assert not app.exception and len(app.dataframe) == 2
     assert any("precedente acquisizione" in e.value for e in app.warning)
     assert any("Da verificare" in e.value for e in app.warning)
     assert not app.success
@@ -172,9 +176,9 @@ def test_notes_form_affects_score_and_is_isolated_per_session(monkeypatch, page)
     monkeypatch.setattr(SourceCache, "get", lambda *a, **kw: acquisition)
     app = authenticated_app().run()
     element(app.selectbox, "Squadra").set_value("SCUOLA BASKET ROMA").run()
-    element(app.selectbox, "Livello criticità").set_value(4)
+    element(app.selectbox, "Peso della squadra").set_value(4)
     element(app.text_area, "Nota").input("Criticità da verificare")
-    element(app.button, "Applica in questa sessione").click().run()
+    element(app.button, "Applica peso e nota").click().run()
     assert not app.exception
     assert app.session_state["notes"]["85582"]["SCUOLA BASKET ROMA"] == Criticism(
         4, "Criticità da verificare"

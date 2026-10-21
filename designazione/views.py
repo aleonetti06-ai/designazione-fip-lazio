@@ -21,6 +21,7 @@ from designazione.history import (
 )
 from designazione.history_ui import save_feedback, sync_history
 from designazione.scoring import ScoringSettings, assess_match
+from designazione.team_ui import team_weights_panel
 
 ROME = ZoneInfo("Europe/Rome")
 
@@ -34,7 +35,7 @@ def get_calendar() -> CalendarIndex:
     return CalendarIndex()
 
 
-def weekly_view(settings: ScoringSettings | None) -> None:
+def weekly_view(settings: ScoringSettings | None, weights_container) -> None:
     st.header("📅 Vista settimanale · gironi A e B")
     now = now_rome()
     dates = st.date_input("Periodo", value=(now.date(), now.date() + timedelta(days=6)))
@@ -58,6 +59,21 @@ def weekly_view(settings: ScoringSettings | None) -> None:
             index.load(force=True)
         now = now_rome()
     snapshot = index.peek()
+    acquisitions = {}
+    if snapshot is not None:
+        for group in GROUPS:
+            candidates = [
+                item
+                for key in snapshot.entries
+                if key.group_id == group
+                and (item := snapshot.acquisition(key, now)) is not None
+                and item.page is not None
+                and item.page.ranking
+            ]
+            if candidates:
+                acquisitions[group] = max(candidates, key=lambda item: item.page.fetched_at)
+    with weights_container:
+        team_weights_panel(acquisitions)
     if snapshot is None:
         st.info(
             "Carica il calendario per vedere le gare. La prima lettura comprende 44 turni e 2 classifiche."

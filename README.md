@@ -66,15 +66,19 @@ Il periodo iniziale è oggi più sei giorni. Si possono filtrare i gironi e
 ordinare per priorità o data. Le anomalie (date mancanti o trascorse senza
 risultato) sono separate; doppioni discordanti vengono esclusi con avviso.
 
-Nelle pagine **Dashboard designazione** e **Verifica dati FIP**, ogni nuova
+Nella **Dashboard designazione**, ogni nuova
 giornata richiede normalmente 2 GET (risultati e classifica), con cache di
 5 minuti per girone/fase/giornata; una cache scaduta si aggiorna alla successiva
-interazione con queste pagine. Il criterio ritorno, solo se attivato con peso > 0,
+interazione con la pagina. Il criterio ritorno, solo se attivato con peso > 0,
 può leggere anche la corrispondente giornata d'andata, sempre con cache. In caso
 di errore del backend viene tentata una sola lettura HTML della pagina pubblica.
 Nessun retry automatico a raffica. Timeout espliciti: 10 secondi per connessione,
 15 per lettura; errori e letture incomplete restano in cache 60 secondi. Il pulsante di aggiornamento
 manuale rispetta almeno 30 secondi tra tentativi sulla stessa pagina.
+
+La dashboard riunisce due schede: **Gare e priorità** per i suggerimenti e
+**Dati FIP: classifica e risultati** per controllare i dati di partenza.
+Le schede usano la stessa acquisizione; la verifica FIP non è più una pagina separata.
 
 Vengono mostrati ultimo tentativo e ultima acquisizione valida, in ora italiana.
 Un errore o un aggiornamento incompleto conserva l'ultima pagina completa della
@@ -164,7 +168,8 @@ le valuta: nella Vista settimanale per entrambi i gironi nel periodo scelto,
 anche se un filtro ne nasconde uno; nella Dashboard per il turno consultato.
 Non occorre selezionarle o confermarle. Non viene registrato automaticamente
 l'intero campionato, né una gara non valutabile, verde, già trascorsa o con
-risultato. La sola pagina Verifica dati FIP non produce segnalazioni.
+risultato. Le due schede della dashboard condividono la valutazione e lo storico:
+aprire i dettagli FIP non esegue una seconda acquisizione né duplica le segnalazioni.
 
 Lo storico conserva la **prima segnalazione del sistema** per girone e ID gara:
 
@@ -211,8 +216,17 @@ repository pubblica.
 
 ## Criticità, note e conservazione
 
-Le note sono distinte per girone e nome esatto della squadra e restano **nella
-sessione corrente**. «Applica in questa sessione» aggiorna i punteggi, ma non
+Nel menu laterale, subito sotto **Pesi e soglie** e prima di **Esporta / importa
+note**, il pannello richiudibile **Pesi squadre** permette di selezionare la
+squadra, assegnare **Normale (+0), Media (+2) o Alta (+4)**, aggiungere una nota e
+premere **Applica peso e nota**. Nella dashboard usa il girone selezionato;
+nella vista settimanale permette di scegliere fra i due gironi senza cambiare
+i filtri delle gare. Le squadre provengono dai dati FIP già caricati: modificare
+i pesi non avvia una scansione del calendario. Il pannello resta disponibile
+nello storico per i gironi già consultati nella sessione.
+
+I pesi societari e le note sono distinti per girone e nome esatto della squadra
+e restano **nella sessione corrente**. «Applica peso e nota» aggiorna i punteggi, ma non
 significa salvataggio condiviso o durevole. Per conservarle:
 
 1. Scaricare il backup JSON dopo le modifiche.
@@ -263,6 +277,7 @@ originario. I controlli live sono separati e dipendono dalla disponibilità FIP.
 Gli esiti della ripresa del lavoro, distinti dai log precedenti, sono in
 [VERIFICA.md](VERIFICA.md).
 
-Il futuro deploy, la configurazione privata della password, l'attivazione dell'archivio
-condiviso e la validazione dei pesi con Andrea rimangono passaggi distinti.
-Questa patch non modifica `main`, l'app pubblica o la piattaforma Apps Script.
+La configurazione privata della password, l'attivazione dell'archivio condiviso
+e la validazione dei pesi con Andrea rimangono passaggi distinti dal codice.
+Le modifiche unite al ramo collegato a Streamlit aggiornano l'app pubblica.
+La piattaforma Apps Script rimane separata.
