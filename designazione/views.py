@@ -38,8 +38,14 @@ def get_calendar() -> CalendarIndex:
 def info_view() -> None:
     st.header("ℹ️ Come funziona l’app")
     st.markdown("""
-Strumento di supporto ai designatori per l’**U15 Gold maschile Lazio, gironi A e B**.
-La decisione finale resta al designatore: l’app non invia designazioni alla FIP.
+La piattaforma nasce per **individuare in anticipo le gare che richiedono maggiore
+attenzione** e orientare il supporto di tutor e formatori ai miniarbitri
+dell’**U15 Gold maschile Lazio, gironi A e B**. L’obiettivo è accompagnare la crescita
+dei giovani arbitri, riconoscendo le situazioni in cui un affiancamento può essere più utile.
+
+Le segnalazioni combinano dati FIP e criticità delle squadre, rendendo visibili
+le motivazioni. Lo storico permette di confrontarle con quanto osservato sul campo
+e valutare nel tempo l’adeguatezza dei pesi.
 
 ### Da dove iniziare
 
