@@ -45,7 +45,7 @@ def test_weekly_load_automatically_saves_reason_and_filters_do_not_redownload(mo
         "📁 Esporta / importa note",
     ]
     assert not app.session_state["history"]
-    element(app.button, "Carica / aggiorna calendario A e B").click().run()
+    element(app.button, "Aggiorna calendario A e B").click().run()
     assert not app.exception and index.load.call_count == 1
     history = dict(app.session_state["history"])
     assert len(history) == 1
@@ -70,7 +70,7 @@ def test_weekly_team_weights_recalculate_without_reload_and_follow_navigation(mo
     monkeypatch.setattr(requests, "get", get)
     app, index = weekly_app(monkeypatch)
     app.run()
-    element(app.button, "Carica / aggiorna calendario A e B").click().run()
+    element(app.button, "Aggiorna calendario A e B").click().run()
     page_b = sample_page(RoundKey("85583", 1, 1))
     index.peek.return_value.entries[page_b.round] = Acquisition(page_b, NOW)
     original = dict(app.session_state["history"])
@@ -110,7 +110,7 @@ def test_past_missed_game_can_be_reported_and_feedback_keeps_original_snapshot(m
     app, index = weekly_app(monkeypatch, page)
     app.run()
     app.date_input[0].set_value((NOW.date() - timedelta(days=6), NOW.date()))
-    element(app.button, "Carica / aggiorna calendario A e B").click().run()
+    element(app.button, "Aggiorna calendario A e B").click().run()
     assert not app.exception and not app.session_state["history"]
     element(app.text_area, "Motivo della segnalazione manuale").input("Difficoltà non prevista")
     element(app.button, "Salva segnalazione manuale").click().run()
@@ -164,7 +164,7 @@ def test_automatic_history_survives_a_new_streamlit_session(monkeypatch):
     monkeypatch.setattr(history_ui, "get_history_store", lambda: first_store)
     app, _ = weekly_app(monkeypatch)
     app.run()
-    element(app.button, "Carica / aggiorna calendario A e B").click().run()
+    element(app.button, "Aggiorna calendario A e B").click().run()
     assert not app.exception
     first = dict(app.session_state["history"])
     assert len(first) == 1 and app.session_state["history_confirmed"] == set(first)
@@ -191,7 +191,7 @@ def test_failed_automatic_write_stays_pending_and_retry_recovers_without_duplica
     app, _ = weekly_app(monkeypatch)
     app.run()
     server.status = 403
-    element(app.button, "Carica / aggiorna calendario A e B").click().run()
+    element(app.button, "Aggiorna calendario A e B").click().run()
     assert not app.exception and len(app.session_state["history"]) == 1
     assert not app.session_state["history_confirmed"]
     assert any("Archivio non accessibile" in e.value for e in app.error)

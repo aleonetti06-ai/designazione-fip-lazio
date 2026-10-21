@@ -53,7 +53,7 @@ def weekly_view(settings: ScoringSettings | None, weights_container) -> None:
         "per entrambi i gironi, con la motivazione originale. Lo stato del salvataggio è indicato nel menu laterale."
     )
     index = get_calendar()
-    refreshed = st.button("Carica / aggiorna calendario A e B")
+    refreshed = st.button("Aggiorna calendario A e B")
     if refreshed:
         with st.spinner("Lettura dei due calendari completi; può richiedere alcuni minuti…"):
             index.load(force=True)
@@ -76,7 +76,7 @@ def weekly_view(settings: ScoringSettings | None, weights_container) -> None:
         team_weights_panel(acquisitions)
     if snapshot is None:
         st.info(
-            "Carica il calendario per vedere le gare. La prima lettura comprende 44 turni e 2 classifiche."
+            "Premi «Aggiorna calendario A e B» per vedere le gare. La prima lettura comprende 44 turni e 2 classifiche."
         )
         return
     st.caption(
