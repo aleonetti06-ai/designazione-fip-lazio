@@ -35,6 +35,61 @@ def get_calendar() -> CalendarIndex:
     return CalendarIndex()
 
 
+def info_view() -> None:
+    st.header("ℹ️ Come funziona l’app")
+    st.markdown("""
+Strumento di supporto ai designatori per l’**U15 Gold maschile Lazio, gironi A e B**.
+La decisione finale resta al designatore: l’app non invia designazioni alla FIP.
+
+### Da dove iniziare
+
+1. In **Vista settimanale**, premi **Aggiorna calendario A e B**, scegli il periodo
+   e filtra le gare. Sono inclusi andata, ritorno e recuperi.
+2. In **Dashboard designazione**, scegli girone e giornata: **Gare e priorità**
+   mostra i suggerimenti; **Dati FIP: classifica e risultati** permette di verificarne le fonti.
+3. Nel menu **Pesi squadre**, scegli la squadra, assegna **+0, +2 o +4** e premi
+   **Applica peso e nota**. **Pesi e soglie** contiene invece le regole generali.
+
+### Punteggi e semafori
+
+Con i valori iniziali: base **1**; entrambe nelle prime quattro **+5**;
+entrambe tra la 6ª e la 10ª **+2,5**; distanza in classifica al massimo due posti
+**+3,5**. Si sommano le criticità delle due squadre, con tetto **10**.
+
+- **Rosso, da 8:** formatore al tavolo.
+- **Giallo, da 6 a meno di 8:** tutor in campo con il miniarbitro.
+- **Verde, sotto 6:** miniarbitri in autonomia.
+
+Le soglie sono modificabili. Il criterio del ritorno dopo un’andata equilibrata
+è provvisorio e inizialmente disattivato. Le gare con risultato o data trascorsa
+non ricevono nuove raccomandazioni. Con dati insufficienti compare **Da verificare**.
+
+### Dati e aggiornamenti
+
+Classifica e calendario provengono da FIP. Un risultato rilevato non implica
+omologazione: lo stato dichiarato da FIP è indicato separatamente.
+Il giallo dell’app riguarda il supporto arbitrale, non l’omologazione.
+
+L’app gira sui server Streamlit. Nella vista settimanale aggiorni con il pulsante;
+nella dashboard la lettura avviene alla consultazione, con cache di **5 minuti**.
+Non ci sono aggiornamenti periodici a pagina chiusa. Dati scaduti, incompleti o
+di ripiego non producono raccomandazioni automatiche. **Dettagli copertura calendario**
+spiega quali turni richiedono verifica.
+
+### Storico e salvataggi
+
+Le gare valutate gialle o rosse entrano automaticamente nello **Storico gare attenzionate**,
+con il primo punteggio e la motivazione: modificare i pesi non riscrive il passato.
+Le gare difficili sfuggite al sistema si segnalano manualmente dalla vista settimanale;
+dalla data della gara si può aggiungere un riscontro nello storico.
+
+Lo storico resta disponibile nelle nuove sessioni **solo se l’archivio Google è
+configurato e il salvataggio è confermato**. Se compare **Da salvare**, conserva
+una copia JSON prima di chiudere. **Pesi squadre e note** restano nella sessione:
+usa **Esporta / importa note** per conservarli e ripristinarli.
+""")
+
+
 def weekly_view(settings: ScoringSettings | None, weights_container) -> None:
     st.header("📅 Vista settimanale · gironi A e B")
     now = now_rome()

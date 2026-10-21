@@ -13,7 +13,7 @@ from designazione.history_ui import history_status, sync_history
 from designazione.scoring import ScoringSettings, assess_match
 from designazione.storage import export_notes, import_notes
 from designazione.team_ui import team_weights_panel
-from designazione.views import history_view, now_rome, weekly_view
+from designazione.views import history_view, info_view, now_rome, weekly_view
 
 ROME = ZoneInfo("Europe/Rome")
 
@@ -232,6 +232,7 @@ def main() -> None:
             "📅 Vista settimanale",
             "🏀 Dashboard designazione",
             "📚 Storico gare attenzionate",
+            "ℹ️ Info",
         ],
         key="page_view",
     )
@@ -241,6 +242,11 @@ def main() -> None:
     if st.sidebar.button("Esci"):
         st.session_state["authenticated"] = False
         st.rerun()
+    if view == "ℹ️ Info":
+        with weights_container:
+            team_weights_panel({})
+        info_view()
+        return
     sync_history()
     if st.session_state.pop("history_saved", False):
         st.info("Storico aggiornato. Verifica lo stato del salvataggio nel menu laterale.")
