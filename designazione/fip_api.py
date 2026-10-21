@@ -78,13 +78,9 @@ def _points(row: dict) -> tuple[int | None, int | None, str | None]:
     return None, None, None  # -1 è il valore sentinella realmente osservato, non uno 0-0.
 
 
-def parse_api_page(
-    results, ranking, key: RoundKey, *, fetched_at: datetime | None = None
-) -> FipPage:
-    """Rifiuta dati ambigui; conserva ordine, punti e stati senza reinterpretarli."""
-    if not isinstance(results, dict) or not isinstance(ranking, list):
-        raise ValueError("Backend FIP: formato JSON non riconosciuto.")
-    _context(results, key)
+def parse_api_ranking(ranking) -> tuple[Standing, ...]:
+    if not isinstance(ranking, list):
+        raise ValueError("Backend FIP: formato classifica non riconosciuto.")
     rows = []
     for row in ranking:
         if not isinstance(row, dict):
@@ -104,6 +100,17 @@ def parse_api_page(
         or [r.position for r in rows] != list(range(1, len(rows) + 1))
     ):
         raise ValueError("Backend FIP: classifica incompleta, duplicata o fuori ordine.")
+    return tuple(rows)
+
+
+def parse_api_page(
+    results, ranking, key: RoundKey, *, fetched_at: datetime | None = None
+) -> FipPage:
+    """Rifiuta dati ambigui; conserva ordine, punti e stati senza reinterpretarli."""
+    if not isinstance(results, dict):
+        raise ValueError("Backend FIP: formato JSON non riconosciuto.")
+    _context(results, key)
+    rows = parse_api_ranking(ranking)
     roster = {r.team_id: r.team for r in rows}
     records = results.get("partite")
     if not isinstance(records, list) or not records:

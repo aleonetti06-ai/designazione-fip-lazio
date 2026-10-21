@@ -47,13 +47,29 @@ non sostituisce l'hosting dell'app pubblicata. La piattaforma CIA Lazio in Apps
 Script rimane separata e non viene modificata.
 
 L'acquisizione è **a richiesta**: apertura della pagina e interazioni eseguono lo
-script Streamlit. La cache condivisa tra sessioni evita nuovi download per
-5 minuti per ciascun girone/fase/giornata. Non esiste un timer o un processo
-periodico: la scadenza della cache provoca una richiesta solo alla successiva
-esecuzione della pagina. Senza visite/interazioni non vengono avviati aggiornamenti.
+script Streamlit, ma la **Vista settimanale**, pagina iniziale, legge FIP solo
+premendo «Carica / aggiorna calendario A e B». Il cambio di date, filtri o pesi
+riusa l'indice acquisito, senza richieste. Non esiste un timer o processo
+periodico: a pagina chiusa non si aggiornano dati o storico.
 
-Ogni nuova giornata richiede normalmente 2 GET (risultati e classifica), non una
-scansione di tutti i turni. Il criterio ritorno, solo se attivato con peso > 0,
+Per includere anche recuperi e spostamenti fuori dalla giornata nominale, il
+caricamento settimanale legge esplicitamente **44 turni + 2 classifiche**, con
+al massimo due richieste simultanee. La classifica viene riutilizzata per
+i 22 turni di ogni girone. Dopo tre turni consecutivi non verificabili si
+interrompe quel girone e si indicano i turni mancanti. Il comando rispetta almeno
+60 secondi tra scansioni; l'indice completo è riutilizzabile per 5 minuti.
+Il timestamp dei dati considera anche l'età della classifica. Dopo 5 minuti
+i dati rimangono consultabili, ma i suggerimenti richiedono un aggiornamento
+esplicito. Non si interpreta un elenco parziale o vuoto come assenza di rischi.
+
+Il periodo iniziale è oggi più sei giorni. Si possono filtrare i gironi e
+ordinare per priorità o data. Le anomalie (date mancanti o trascorse senza
+risultato) sono separate; doppioni discordanti vengono esclusi con avviso.
+
+Nelle pagine **Dashboard designazione** e **Verifica dati FIP**, ogni nuova
+giornata richiede normalmente 2 GET (risultati e classifica), con cache di
+5 minuti per girone/fase/giornata; una cache scaduta si aggiorna alla successiva
+interazione con queste pagine. Il criterio ritorno, solo se attivato con peso > 0,
 può leggere anche la corrispondente giornata d'andata, sempre con cache. In caso
 di errore del backend viene tentata una sola lettura HTML della pagina pubblica.
 Nessun retry automatico a raffica. Timeout espliciti: 10 secondi per connessione,
@@ -123,7 +139,8 @@ sotto 6, miniarbitri in autonomia. I pesi e le soglie sono modificabili, ma la
 soglia gialla deve rimanere strettamente inferiore alla rossa. Esempi conservati:
 2ª contro 3ª → 9,5; 1ª contro 4ª → 6; 6ª contro 8ª → 7; 1ª contro 11ª → 1.
 Ogni contributo è mostrato separatamente. Il punteggio viene proposto per le
-gare senza risultato, non per quelle già concluse/con punteggio pubblicato.
+gare con data corrente o futura e senza risultato, non per quelle già
+concluse/con punteggio pubblicato o con data da verificare.
 
 Il criterio aggiuntivo **ritorno dopo andata equilibrata** è disattivato e ha
 peso iniziale **0**. Il limite iniziale di scarto **5** è una proposta provvisoria,
@@ -139,6 +156,47 @@ numero di giornata richiede un adattamento documentato, non una scansione occult
 Le posizioni iniziali, specie quando molte squadre hanno zero punti, sono ancora
 poco informative: i pesi richiedono validazione operativa. La scelta arbitrale
 rimane una decisione del designatore.
+
+## Storico delle segnalazioni e riscontro
+
+Le gare **gialle e rosse vengono registrate automaticamente** quando il sistema
+le valuta: nella Vista settimanale per entrambi i gironi nel periodo scelto,
+anche se un filtro ne nasconde uno; nella Dashboard per il turno consultato.
+Non occorre selezionarle o confermarle. Non viene registrato automaticamente
+l'intero campionato, né una gara non valutabile, verde, già trascorsa o con
+risultato. La sola pagina Verifica dati FIP non produce segnalazioni.
+
+Lo storico conserva la **prima segnalazione del sistema** per girone e ID gara:
+
+- gara e data previste in quel momento, timestamp della segnalazione e della fonte;
+- punteggio, indicazione suggerita e motivazione con tutti i contributi;
+- posizioni ufficiali, criticità, pesi e soglie utilizzati, spiegazione del ritorno.
+
+Classifica, pesi o criticità successivi non riscrivono questa fotografia.
+Le gare difficili sfuggite al sistema si aggiungono con «Segnala una gara
+sfuggita al sistema», scegliendo anche un periodo passato. L'origine è
+**Manuale**, distinta da **Sistema**; per una segnalazione a posteriori non si
+inventa una valutazione originaria. Se una gara manuale riceve successivamente
+una segnalazione automatica, entrambe restano distinte. I totali dello storico
+contano segnalazioni, non necessariamente gare uniche.
+
+Dalla data della gara si possono registrare supporto effettivamente presente,
+riscontro (sottostimata/coerente/sovrastimata/non valutabile) e osservazione.
+Questi campi non modificano la previsione conservata e non aggiornano da soli
+pesi o criticità societarie. Non è un flusso di assegnazione persone o conferma
+presenze. La revisione dei semafori resta futura; il campione selezionato e
+l'effetto del supporto presente vanno considerati nel confronto con Andrea.
+
+**Limite di conservazione:** la registrazione automatica avviene nella sessione
+Streamlit, non in un archivio durevole. Scaricare «Backup storico JSON» dalla
+sezione Storico e reimportarlo in una nuova sessione con conferma esplicita.
+L'importazione controlla campionato, versione, origine, duplicati, pesi e
+coerenza dei contributi; massimo 2 MiB e 440 segnalazioni. Un backup errato non
+sostituisce lo storico. Il backup delle criticità resta separato. Riavvii,
+perdita della sessione o chiusura del collegamento possono perdere dati non
+esportati: senza una destinazione esterna autorizzata non è garantita la
+conservazione automatica tra sessioni o operatori. Non salvare backup reali
+nella repository pubblica.
 
 ## Criticità, note e conservazione
 
@@ -185,8 +243,9 @@ delle dipendenze installate. È possibile eseguire separatamente:
 
 I test sono **offline**: fixture HTML/JSON minimali della fonte, senza arbitri o
 altri dati personali non necessari; rete simulata per errori e cache; AppTest per
-accesso, navigazione, modifiche dei widget, note e assenza di raccomandazioni con
-dati falliti/precedenti. Il confronto HTML/JSON protegge i casi reali del parser
+accesso, navigazione, modifiche dei widget, note, scansione esplicita dei due
+gironi, storico automatico immutabile, segnalazioni manuali a posteriori, backup
+e assenza di raccomandazioni con dati falliti/precedenti. Il confronto HTML/JSON protegge i casi reali del parser
 originario. I controlli live sono separati e dipendono dalla disponibilità FIP.
 Gli esiti della ripresa del lavoro, distinti dai log precedenti, sono in
 [VERIFICA.md](VERIFICA.md).

@@ -141,3 +141,21 @@ def test_backend_failure_html_fallback_is_explicit_and_blocks_recommendations(
     acquisition = Acquisition(page, page.fetched_at)
     assert page.source_label == "HTML pubblico FIP" and not acquisition.usable_for_scores
     assert any("Ripiego su HTML" in issue for issue in page.issues)
+
+
+def test_calendar_fetch_reuses_ranking_without_requesting_it_again(
+    monkeypatch, api_results, api_ranking, key
+):
+    requested = []
+
+    def get(url, **kwargs):
+        requested.append(url)
+        response = requests.Response()
+        response.status_code = 200
+        response._content = json.dumps(api_results).encode()
+        return response
+
+    monkeypatch.setattr(requests, "get", get)
+    page = fetch_page(key, ranking=api_ranking)
+    assert len(requested) == 1 and "/risultati?" in requested[0]
+    assert len(page.ranking) == 11 and len(page.matches) == 5 and not page.issues

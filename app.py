@@ -8,8 +8,10 @@ import streamlit as st
 
 from designazione.domain import COMPETITION, GROUPS, Acquisition, Criticism, RoundKey
 from designazione.fip import SourceCache, source_url
+from designazione.history import remember_signal
 from designazione.scoring import ScoringSettings, assess_match
 from designazione.storage import export_notes, import_notes
+from designazione.views import history_view, now_rome, weekly_view
 
 ROME = ZoneInfo("Europe/Rome")
 
@@ -192,6 +194,10 @@ def render_matches(
         "Risultati, stato gara e omologazione sono distinti. "
         "L'omologazione viene indicata solo se lo stato FIP è «omologata»."
     )
+    st.caption(
+        "Le priorità gialle e rosse vengono salvate automaticamente nello storico della sessione. "
+        "Esporta il backup per conservarle."
+    )
     for match in page.matches:
         day = match.day.strftime("%d/%m/%Y") if match.day else "Data non disponibile"
         st.markdown(f"**{match.home} — {match.away}**")
@@ -209,12 +215,24 @@ def render_matches(
             if settings is None:
                 st.warning("Correggere pesi e soglie prima della valutazione.")
                 continue
+            if match.day is None or match.day < now_rome().date():
+                st.warning("Da verificare: data assente o trascorsa senza risultato pubblicato.")
+                continue
             score = assess_match(
                 match,
                 acquisition,
                 st.session_state["notes"].get(page.round.group_id, {}),
                 settings,
                 first_leg,
+            )
+            st.session_state["history"] = remember_signal(
+                st.session_state["history"],
+                match,
+                acquisition,
+                st.session_state["notes"].get(page.round.group_id, {}),
+                settings,
+                first_leg,
+                now=now_rome(),
             )
             if score.total is None:
                 st.warning(f"Da verificare · {score.blocked_reason}")
@@ -244,8 +262,32 @@ def main() -> None:
         st.stop()
     if "notes" not in st.session_state:
         st.session_state["notes"] = {}
+    if "history" not in st.session_state:
+        st.session_state["history"] = {}
     st.sidebar.title("📌 Designazione CIA")
-    view = st.sidebar.radio("Pagina", ["🏀 Dashboard designazione", "🔍 Verifica dati FIP"])
+    view = st.sidebar.radio(
+        "Pagina",
+        [
+            "📅 Vista settimanale",
+            "🏀 Dashboard designazione",
+            "🔍 Verifica dati FIP",
+            "📚 Storico gare attenzionate",
+        ],
+        key="page_view",
+    )
+    settings = settings_panel()
+    transfer_panel()
+    if st.sidebar.button("Esci"):
+        st.session_state["authenticated"] = False
+        st.rerun()
+    if st.session_state.pop("history_saved", False):
+        st.success("Storico aggiornato nella sessione. Scarica il backup per conservarlo.")
+    if view == "📅 Vista settimanale":
+        weekly_view(settings)
+        return
+    if view == "📚 Storico gare attenzionate":
+        history_view()
+        return
     group = st.sidebar.selectbox("Girone", list(GROUPS), format_func=lambda g: f"{GROUPS[g]} ({g})")
     leg = st.sidebar.selectbox("Fase", [1, 0], format_func=lambda v: "Andata" if v else "Ritorno")
     number = st.sidebar.selectbox("Giornata", list(range(1, COMPETITION.rounds_per_leg + 1)))
@@ -255,16 +297,11 @@ def main() -> None:
         "Cache 5 minuti; dopo un errore 60 secondi. "
         "Il pulsante rispetta un intervallo minimo di 30 secondi per pagina."
     )
-    settings = settings_panel()
-    transfer_panel()
     with st.spinner("Acquisizione FIP della giornata selezionata…"):
         acquisition = get_source().get(key, force=force)
     notes_panel(acquisition, group)
     if st.session_state.pop("notes_saved", False):
         st.sidebar.success("Criticità applicata alla sessione. Scarica il backup per conservarla.")
-    if st.sidebar.button("Esci"):
-        st.session_state["authenticated"] = False
-        st.rerun()
     st.title("🏀 Designazione CIA · U15 Gold Lazio")
     st.caption(
         "Supporto ai designatori. La scelta della coppia arbitrale resta una valutazione umana."

@@ -25,7 +25,7 @@ from designazione.domain import (
     RoundKey,
     Standing,
 )
-from designazione.fip_api import api_urls, parse_api_page
+from designazione.fip_api import api_urls, parse_api_page, parse_api_ranking
 
 BASE_URL = "https://fip.it/risultati/"
 MONTHS = {
@@ -240,12 +240,23 @@ def _get(url: str) -> requests.Response:
     return response
 
 
-def fetch_page(key: RoundKey) -> FipPage:
+def fetch_ranking(group_id: str) -> list:
+    """Una classifica validata da riusare nella scansione esplicita del calendario."""
+    try:
+        payload = json.loads(_get(api_urls(RoundKey(group_id, 1, 1))[1]).content)
+        parse_api_ranking(payload)
+        return payload
+    except (ValueError, UnicodeError) as exc:
+        raise FipError(str(exc)) from exc
+
+
+def fetch_page(key: RoundKey, *, ranking: list | None = None) -> FipPage:
     # Endpoint e parametri osservati nel sito FIP, poi verificati per A/B e ritorno.
     try:
         result_url, ranking_url = api_urls(key)
         results = json.loads(_get(result_url).content)
-        ranking = json.loads(_get(ranking_url).content)
+        if ranking is None:
+            ranking = json.loads(_get(ranking_url).content)
         return parse_api_page(results, ranking, key)
     except (ValueError, UnicodeError) as exc:
         api_error = str(exc)

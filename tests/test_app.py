@@ -1,5 +1,6 @@
 import json
 from dataclasses import replace
+from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
 from secrets import token_urlsafe
@@ -11,6 +12,7 @@ import requests
 import streamlit as st
 from streamlit.testing.v1 import AppTest
 
+from designazione import views
 from designazione.domain import Acquisition, Criticism
 from designazione.fip import SourceCache
 from designazione.storage import export_notes, import_notes
@@ -19,7 +21,8 @@ APP = str(Path(__file__).parents[1] / "app.py")
 
 
 @pytest.fixture(autouse=True)
-def clean_resource_cache():
+def clean_resource_cache(monkeypatch):
+    monkeypatch.setattr(views, "now_rome", lambda: datetime(2026, 10, 21, 10, tzinfo=timezone.utc))
     st.cache_resource.clear()
     yield
     st.cache_resource.clear()
@@ -33,6 +36,7 @@ def authenticated_app():
     app = AppTest.from_file(APP, default_timeout=10)
     app.secrets["app_password"] = token_urlsafe(24)  # Solo credenziale effimera di test.
     app.session_state["authenticated"] = True
+    app.session_state["page_view"] = "🏀 Dashboard designazione"
     return app
 
 
@@ -59,6 +63,7 @@ def test_login_dashboard_verification_and_widgets_do_not_rescan_source(
     password = token_urlsafe(24)
     app = AppTest.from_file(APP, default_timeout=10)
     app.secrets["app_password"] = password
+    app.session_state["page_view"] = "🏀 Dashboard designazione"
     app.run()
     assert not app.exception and not get.called
     element(app.text_input, "Password").input(password)
@@ -175,6 +180,10 @@ def test_notes_form_affects_score_and_is_isolated_per_session(monkeypatch, page)
         4, "Criticità da verificare"
     )
     assert any("SCORE 8.5" in e.value for e in app.error)
+    assert any(
+        e.score.total == 8.5 and e.origin == "Sistema"
+        for e in app.session_state["history"].values()
+    )
     assert any("Criticità da verificare" in e.value for e in app.text)
     assert import_notes(downloads[-1]) == app.session_state["notes"]
     other = authenticated_app().run()
