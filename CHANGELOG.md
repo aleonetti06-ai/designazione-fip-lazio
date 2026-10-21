@@ -4,6 +4,8 @@ Registro sintetico delle modifiche, dalla più recente.
 
 ## 21 ottobre 2026
 
+- Chiarito nelle **Info** l’obiettivo della piattaforma: individuare le gare da
+  attenzionare e orientare il supporto formativo ai giovani arbitri.
 - Semplificati i testi della vista settimanale e dei pesi; riuniti fonte e
   aggiornamento nella dashboard, con dettagli tecnici richiudibili e avvisi
   sui dati precedenti conservati. Aggiunta la licenza MIT per il codice.
