@@ -1,0 +1,68 @@
+[
+  {
+    "posizione": 1,
+    "nome_squadra": "OLIMPIA ROMA",
+    "punti_classifica": 2,
+    "squadra_codice": "055525"
+  },
+  {
+    "posizione": 2,
+    "nome_squadra": "BRACCIANO BASKET",
+    "punti_classifica": 2,
+    "squadra_codice": "044012"
+  },
+  {
+    "posizione": 3,
+    "nome_squadra": "DON BOSCO NUOVO SALARIO",
+    "punti_classifica": 2,
+    "squadra_codice": "050058"
+  },
+  {
+    "posizione": 4,
+    "nome_squadra": "SUPERNOVA FIUMICINO",
+    "punti_classifica": 0,
+    "squadra_codice": "056236"
+  },
+  {
+    "posizione": 5,
+    "nome_squadra": "SCUOLA BASKET ROMA",
+    "punti_classifica": 0,
+    "squadra_codice": "054809"
+  },
+  {
+    "posizione": 6,
+    "nome_squadra": "STELLAEBK",
+    "punti_classifica": 0,
+    "squadra_codice": "055447"
+  },
+  {
+    "posizione": 7,
+    "nome_squadra": "VIS AURELIA BK",
+    "punti_classifica": 0,
+    "squadra_codice": "054209"
+  },
+  {
+    "posizione": 8,
+    "nome_squadra": "ESQUILINO BASKETBALL",
+    "punti_classifica": 0,
+    "squadra_codice": "040057"
+  },
+  {
+    "posizione": 9,
+    "nome_squadra": "WILLIE BASKET RIETI",
+    "punti_classifica": 0,
+    "squadra_codice": "051901"
+  },
+  {
+    "posizione": 10,
+    "nome_squadra": "BASKET GUIDONIA",
+    "punti_classifica": 0,
+    "squadra_codice": "001362"
+  },
+  {
+    "posizione": 11,
+    "nome_squadra": "BASKET ROMA",
+    "punti_classifica": 0,
+    "squadra_codice": "054583"
+  }
+]
