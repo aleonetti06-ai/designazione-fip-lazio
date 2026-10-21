@@ -1,5 +1,10 @@
 # Verifica della patch — 21 ottobre 2026
 
+Questo è un registro storico delle verifiche e dei limiti riscontrati durante
+lo sviluppo. I blocchi di pubblicazione citati nelle prime fasi sono stati poi
+risolti con i merge delle PR. Per lo stato funzionale attuale e le modifiche
+pubblicate, consultare [README.md](README.md) e [CHANGELOG.md](CHANGELOG.md).
+
 ## Recupero e base
 
 Recuperato il checkout cloud originale della precedente esecuzione, senza

@@ -85,6 +85,11 @@ def test_login_dashboard_verification_and_widgets_do_not_rescan_source(
     assert matches.loc["002979", "Risultato"] == "Senza risultato pubblicato"
     assert matches.loc["002983", "Omologazione"] == "Omologata (stato FIP)"
     assert matches.loc["002979", "Stato FIP"] == "designata"
+    history = dict(app.session_state["history"])
+    element(app.radio, "Pagina").set_value("ℹ️ Info").run()
+    assert not app.exception and not app.dataframe and get.call_count == 2
+    assert any("Come funziona l’app" in header.value for header in app.header)
+    assert app.session_state["history"] == history
     element(app.button, "Esci").click().run()
     assert not app.exception and not app.session_state["authenticated"]
     assert element(app.text_input, "Password") and get.call_count == 2
